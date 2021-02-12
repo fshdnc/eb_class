@@ -22,7 +22,7 @@ class RowDataModule(pl.LightningDataModule):
         self.batch_size=batch_size
 
     def class_nums(self):
-        return {"lab_fat_pad":2,"lab_fx":2}
+        return {"lab_fat_pad":["0","1"],"lab_fx":["0","1"]}
         
     def prepare_data(self):
         pass
@@ -49,12 +49,20 @@ class RowDataModule(pl.LightningDataModule):
             d["token_type_ids"]=torch.LongTensor(token_type_ids)
             d["attention_mask"]=torch.LongTensor(attention_mask)
 
+        # Classes into numerical indices
+        for k,lst in self.class_nums().items():
+            for d in self.all_data:
+                d[k]=lst.index(d[k])
+
         # Split to train-dev-test
         dev_start,test_start=int(len(self.all_data)*0.8),int(len(self.all_data)*0.9)
         self.train=self.all_data[:dev_start]
         self.dev=self.all_data[dev_start:test_start]
         self.test=self.all_data[test_start:]
 
+    def data_sizes(self):
+        return len(self.train), len(self.dev), len(self.test)
+        
     def get_dataloader(self,which_set,**kwargs):
         """Just a utility so I don't need to repeat this in all the *_dataloader callbacks"""
         return torch.utils.data.DataLoader(which_set,collate_fn=collate_tensors_fn,batch_size=self.batch_size,**kwargs)
@@ -72,17 +80,22 @@ def collate_tensors_fn(items):
     item=items[0] #this is a dictionary as it comes from the dataset
 
     pad_these=[] #let us be wannabe clever and pad everything which is a tensor
+    tensor_these=[] #make a tensor of everything which is a "lab_" key and an int
     list_these=[] #everything which is not a tensor we stick into a list
     
     for k,v in item.items():
         if isinstance(v,torch.Tensor):
             pad_these.append(k)
+        elif isinstance(v,int) and k.startswith("lab_"):
+            tensor_these.append(k)
         else:
             list_these.append(k)
 
     batch_dict={}
     for k in pad_these:
         batch_dict[k]=torch.nn.utils.rnn.pad_sequence([item[k] for item in items],batch_first=True)
+    for k in tensor_these:
+        batch_dict[k]=torch.LongTensor([item[k] for item in items])
     for k in list_these:
         batch_dict[k]=[item[k] for item in items]
 

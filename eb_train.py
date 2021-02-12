@@ -17,8 +17,9 @@ if __name__=="__main__":
 
     data=eb_data_reader.RowDataModule(args.tsvs,batch_size=args.batch_size,bert_model_name=args.bert_path)
     data.setup()
+    train_len,dev_len,test_len=data.data_sizes()
 
-    model=eb_model.ClassModel(data.class_nums(),bert_model=args.bert_path)
+    model=eb_model.ClassModel(data.class_nums(),bert_model=args.bert_path,lr=1e-5,num_training_steps=train_len//args.batch_size*args.epochs)
     trainer=pl.Trainer(gpus=1,max_epochs=args.epochs)
     trainer.fit(model,datamodule=data)
     
