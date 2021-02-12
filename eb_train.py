@@ -1,7 +1,7 @@
 import argparse
 import pytorch_lightning as pl
 import sys
-import elbow_data_reader, elbow_model
+import eb_data_reader, eb_model
 
 
 if __name__=="__main__":
@@ -15,10 +15,10 @@ if __name__=="__main__":
 
     args=parser.parse_args()
 
-    data=elbow_data_reader.RowDataModule(args.tsvs,batch_size=args.batch_size,bert_model_name=args.bert_path)
+    data=eb_data_reader.RowDataModule(args.tsvs,batch_size=args.batch_size,bert_model_name=args.bert_path)
     data.setup()
 
-    model=elbow_model.ClassModel(data.class_nums(),bert_model=args.bert_path)
+    model=eb_model.ClassModel(data.class_nums(),bert_model=args.bert_path)
     trainer=pl.Trainer(gpus=1,max_epochs=args.epochs)
     trainer.fit(model,datamodule=data)
     
