@@ -3,6 +3,7 @@ import sys
 import random
 random.seed(0)
 
+import collections
 import pytorch_lightning as pl
 import transformers
 import torch
@@ -12,7 +13,7 @@ def csv2dict(inp):
     for d in r:
         new_d={"text":d["PYYNTO"], "lab_fat_pad":d["fat_pad"], "lab_fx":d["fx"]}
         yield new_d
-    
+
 class RowDataModule(pl.LightningDataModule):
 
     def __init__(self,fnames_or_files,batch_size=20,bert_model_name="TurkuNLP/bert-base-finnish-cased-v1"):
@@ -27,6 +28,20 @@ class RowDataModule(pl.LightningDataModule):
     def prepare_data(self):
         pass
 
+    def print_basic_stats(self):
+        counters={name:collections.Counter() for name in self.class_nums()}
+        for d in self.all_data:
+            for k,v in d.items():
+                if k.startswith("lab_"):
+                    counters[k].update({v:1})
+        for name, cntr in counters.items():
+            print("OUTPUT:", name)
+            total=sum(cnt for cls,cnt in cntr.items())
+            for cls,cnt in cntr.most_common():
+                print(f"{cls}   {cnt}/{total}={cnt/total*100:3.1f}")
+            print()
+            
+    
     def setup(self):
         # Read in from the CSV
         self.all_data=[]
@@ -39,8 +54,10 @@ class RowDataModule(pl.LightningDataModule):
             else:
                 f=fname
             self.all_data.extend(list(csv2dict(f)))
-        random.shuffle(self.all_data)
 
+            
+        random.shuffle(self.all_data)
+        self.print_basic_stats()
         # Tokenize and gather input ids, token type ids and attention masks which we need for the model
         tokenizer=transformers.BertTokenizer.from_pretrained(self.bert_model_name,truncation=True)
         tokenized=tokenizer([d["text"] for d in self.all_data])
@@ -101,7 +118,6 @@ def collate_tensors_fn(items):
 
     return batch_dict
     
-
 if __name__=="__main__":
     d=RowDataModule([sys.stdin])
     d.setup()
