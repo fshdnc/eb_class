@@ -15,6 +15,7 @@ class JsonDataModule(pl.LightningDataModule):
         self.fnames=fnames_or_files
         self.bert_model_name=bert_model_name
         self.batch_size=batch_size
+        #self.label_map = {0:5, 1:1, 2:2, 3:3, 4:4}
 
 
     def class_nums(self):
@@ -23,9 +24,25 @@ class JsonDataModule(pl.LightningDataModule):
     def prepare_data(self):
         pass
 
-    def print_basic_stats(self):
+    def get_class_weights(self):
+        print("Training set:")
+        occurrences = self.basic_stats(self.train, get=True) # Dict[name]=List(class occurrences)
+
+        # from occurrences to weights
+        # https://www.analyticsvidhya.com/blog/2020/10/improve-class-imbalance-class-weights/
+        weights_dict = {}
+        for name, occ_lst in occurrences.items():
+            weights = []
+            total = sum(occ_lst)
+            n_classes = len(occ_lst)
+            for occ in occ_lst:
+                weights.append(total/(n_classes*occ) if occ!=0 else 0)
+            weights_dict[name] = torch.Tensor(weights)
+        return weights_dict
+    
+    def basic_stats(self, data, get=False):
         counters = {name:collections.Counter() for name in self.class_nums()}
-        for d in self.all_data:
+        for d in data:
             for k,v in d.items():
                 if k.startswith("lab_"):
                     counters[k].update({v:1})
@@ -35,6 +52,16 @@ class JsonDataModule(pl.LightningDataModule):
             for cls,cnt in cntr.most_common():
                 print(f"{cls}   {cnt}/{total}={cnt/total*100:3.1f}")
             print()
+
+        if get: # return the occurrence numbers
+            occurrences = {}
+            for name, cntr in counters.items():
+                class_no = len(self.class_nums()[name])
+                occ = []
+                for i in range(class_no):
+                    occ.append(cntr[i] if i in cntr else 0)
+                occurrences[name] = occ
+            return occurrences
         
     def setup(self):
         # Read in from the JSONs
@@ -44,7 +71,7 @@ class JsonDataModule(pl.LightningDataModule):
                 self.all_data.extend(json.load(f))
 
         random.shuffle(self.all_data)
-        self.print_basic_stats()
+        self.basic_stats(self.all_data)
         # Tokenize and gather input ids, token type ids and attention masks which we need for the model
         tokenizer = transformers.BertTokenizer.from_pretrained(self.bert_model_name,truncation=True)
         tokenized = tokenizer([" ".join(d["essay"]) for d in self.all_data],

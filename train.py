@@ -26,10 +26,13 @@ if __name__=="__main__":
     data.setup()
     train_len, dev_len, test_len = data.data_sizes()
 
+    class_weights = data.get_class_weights()
+
     model = model.ClassModel(data.class_nums(),
                              bert_model=args.bert_path,
                              lr=1e-6,
-                             num_training_steps=train_len//args.batch_size*args.epochs)
+                             num_training_steps=train_len//args.batch_size*args.epochs,
+                             class_weights={k: v.cuda() for k, v in class_weights.items()})
     os.system("rm -rf lightnint_logs")
     logger = pl.loggers.TensorBoardLogger("lightning_logs", version="latest", name="ebm")
     trainer = pl.Trainer(gpus=1,

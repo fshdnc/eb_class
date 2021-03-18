@@ -5,12 +5,19 @@ import torch
 
 class ClassModel(pl.LightningModule):
 
-    def __init__(self, class_nums, bert_model="TurkuNLP/bert-base-finnish-cased-v1", **config):
+    def __init__(self, class_nums, bert_model="TurkuNLP/bert-base-finnish-cased-v1", class_weights=None, **config):
+        """
+        class_weights: Dict[name]=torch.Tesnor([weights])
+        """
         super().__init__()
         self.bert = transformers.BertModel.from_pretrained(bert_model)
         self.cls_layers = torch.nn.ModuleDict({name: torch.nn.Linear(self.bert.config.hidden_size, len(lst)) for name, lst in class_nums.items()})
         self.train_acc = torch.nn.ModuleDict({name: pl.metrics.Accuracy() for name in class_nums})
         self.val_acc = torch.nn.ModuleDict({name: pl.metrics.Accuracy() for name in class_nums})
+        if class_weights==None:
+            self.class_weights = {name: None for name in class_nums}
+        else:
+            self.class_weights = class_weights
         self.config = config
 
 
@@ -25,7 +32,7 @@ class ClassModel(pl.LightningModule):
         losses = []
         pbar = {}
         for name in self.cls_layers:
-            loss = F.cross_entropy(out[name], batch[name])
+            loss = F.cross_entropy(out[name], batch[name], weight=self.class_weights[name])
             losses.append(loss)
             acc = self.train_acc[name](out[name], batch[name])
             self.log(f'train_acc_{name}', acc*100)
@@ -58,6 +65,9 @@ class ProjectionClassModel(pl.LightningModule):
     def __init__(self, class_nums, bert_model="TurkuNLP/bert-base-finnish-cased-v1", **config):
         super().__init__()
         self.bert = transformers.BertModel.from_pretrained(bert_model)
+        #for param in self.bert.parameters():
+        #    param.requires_grad = False
+
         self.proj_layers=torch.nn.ModuleDict({name: torch.nn.Linear(self.bert.config.hidden_size, self.bert.config.hidden_size) for name, lst in class_nums.items()})
         self.cls_layers = torch.nn.ModuleDict({name: torch.nn.Linear(self.bert.config.hidden_size, len(lst)) for name, lst in class_nums.items()})
         self.train_acc = torch.nn.ModuleDict({name: pl.metrics.Accuracy() for name in class_nums})
