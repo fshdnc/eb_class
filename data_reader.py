@@ -8,6 +8,8 @@ import pytorch_lightning as pl
 import transformers
 import torch
 
+import preprocessing
+
 class JsonDataModule(pl.LightningDataModule):
 
     def __init__(self,fnames_or_files,batch_size=20,bert_model_name="TurkuNLP/bert-base-finnish-cased-v1"):
@@ -62,7 +64,25 @@ class JsonDataModule(pl.LightningDataModule):
                     occ.append(cntr[i] if i in cntr else 0)
                 occurrences[name] = occ
             return occurrences
-        
+
+    def break_essays(self, data):
+        essays_processed = []
+        for d in data:
+            pieces = preprocessing.seg_by_char_index(d["essay"], 1500)
+            for pcs in pieces:
+                essays_processed.append({k:(v if k!="essay" else pcs) for k,v in d.items()})
+        return essays_processed
+    
+    def tokenize(self, data, tokenizer):
+        # Tokenize and gather input ids, token type ids and attention masks which we need for the model
+        tokenized = tokenizer([d["essay"] for d in data],
+                              truncation="longest_first",
+                              max_length=512)
+        for d,input_ids,token_type_ids,attention_mask in zip(data,tokenized["input_ids"], tokenized["token_type_ids"], tokenized["attention_mask"]):
+            d["input_ids"]=torch.LongTensor(input_ids)
+            d["token_type_ids"]=torch.LongTensor(token_type_ids)
+            d["attention_mask"]=torch.LongTensor(attention_mask)
+                    
     def setup(self):
         # Read in from the JSONs
         self.all_data=[]
@@ -72,27 +92,32 @@ class JsonDataModule(pl.LightningDataModule):
 
         random.shuffle(self.all_data)
         self.basic_stats(self.all_data)
-        # Tokenize and gather input ids, token type ids and attention masks which we need for the model
-        tokenizer = transformers.BertTokenizer.from_pretrained(self.bert_model_name,truncation=True)
-        tokenized = tokenizer([" ".join(d["essay"]) for d in self.all_data],
-                              truncation="longest_first",
-                              max_length=512)
-        for d,input_ids,token_type_ids,attention_mask in zip(self.all_data,tokenized["input_ids"], tokenized["token_type_ids"], tokenized["attention_mask"]):
-            d["input_ids"]=torch.LongTensor(input_ids)
-            d["token_type_ids"]=torch.LongTensor(token_type_ids)
-            d["attention_mask"]=torch.LongTensor(attention_mask)
 
-        # Classes into numerical indices
-        for k, lst in self.class_nums().items():
-            for d in self.all_data:
-                d[k] = lst.index(d[k])
-                
+        # essays are in list, turn into string
+        for d in self.all_data:
+            d["essay"] = " ".join(d["essay"])
+        
         # Split to train-dev-test
         dev_start,test_start=int(len(self.all_data)*0.8),int(len(self.all_data)*0.9)
         self.train=self.all_data[:dev_start]
         self.dev=self.all_data[dev_start:test_start]
         self.test=self.all_data[test_start:]
 
+        # essays are long, break them
+        self.train = self.break_essays(self.train)
+        self.all_data = self.train + self.dev + self.test
+        print("After segmenting essays")
+        self.basic_stats(self.all_data)
+        
+        # tokenization
+        tokenizer = transformers.BertTokenizer.from_pretrained(self.bert_model_name,truncation=True)
+        self.tokenize(self.all_data, tokenizer)
+
+        # Classes into numerical indices
+        for k, lst in self.class_nums().items():
+            for d in self.all_data:
+                d[k] = lst.index(d[k])
+                
     def data_sizes(self):
         return len(self.train), len(self.dev), len(self.test)
     
