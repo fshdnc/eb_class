@@ -20,5 +20,6 @@ def evaluate(dataloader, model):
     print(target)
     assert len(preds)==len(target)
     corrects = [1 if p==t else 0 for p, t in zip(preds,target)]
-    print("Val_acc\t{}".format(sum(corrects)/len(corrects)))
+    print("Acc\t{}".format(sum(corrects)/len(corrects)))
+    print("Predicted class number:",len(set(preds)))
 
