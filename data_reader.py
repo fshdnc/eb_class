@@ -65,6 +65,32 @@ class JsonDataModule(pl.LightningDataModule):
                 occurrences[name] = occ
             return occurrences
 
+    def remove_no_label(self):
+        print("Removing data points without label(s)...")
+        print("BEFORE", len(self.all_data))
+        new = []
+        for data in self.all_data:
+            add = True
+            for k in data.keys():
+                if k.startswith("lab_"):
+                    if not data[k]:
+                        add = False
+            if add:
+                new.append(data)
+        self.all_data = new
+        print("AFTER", len(self.all_data))
+
+    def clean_data(self):
+        for data in self.all_data:
+            remove = []
+            for k in data.keys():
+                if k=="essay" or k.startswith("lab_"):
+                    pass
+                else:
+                    remove.append(k)
+            for k in remove:
+                del data[k]
+        
     def break_essays(self, data):
         essays_processed = []
         for d in data:
@@ -90,10 +116,16 @@ class JsonDataModule(pl.LightningDataModule):
             with open(fname, "r") as f:
                 self.all_data.extend(json.load(f))
 
+        # remove essays without labels
+        self.remove_no_label()
+
+        # remove key, value pairs that are not used
+        self.clean_data()
+        
         random.shuffle(self.all_data)
         self.basic_stats(self.all_data)
 
-        # essays are in list, turn into string
+        # essays and prompts are in list, turn into string
         for d in self.all_data:
             d["essay"] = " ".join(d["essay"])
         
@@ -104,7 +136,7 @@ class JsonDataModule(pl.LightningDataModule):
         self.test=self.all_data[test_start:]
 
         # essays are long, break them
-        self.train = self.break_essays(self.train)
+        #self.train = self.break_essays(self.train)
         self.all_data = self.train + self.dev + self.test
         print("After segmenting essays")
         self.basic_stats(self.all_data)
