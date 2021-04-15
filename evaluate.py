@@ -2,7 +2,7 @@
 
 import torch
 
-def evaluate(dataloader, model):
+def evaluate(dataloader, model, label_map):
     with torch.no_grad():
         preds = []
         for batch in dataloader:
@@ -16,8 +16,8 @@ def evaluate(dataloader, model):
     #values, preds = torch.max(torch.tensor(preds), dim=1)
     target = [x['lab_grade'] for x in dataloader]
     target = [int(tt) for t in target for tt in t]
-    print(preds)
-    print(target)
+    print("Predictions:", [label_map["lab_grade"][p] for p in preds])
+    print("Gold standard:", [label_map["lab_grade"][p] for p in target])
     assert len(preds)==len(target)
     corrects = [1 if p==t else 0 for p, t in zip(preds,target)]
     print("Acc\t{}".format(sum(corrects)/len(corrects)))

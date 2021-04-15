@@ -22,6 +22,13 @@ class JsonDataModule(pl.LightningDataModule):
 
     def class_nums(self):
         return {"lab_grade": ["1","2","3","4","5"]}
+
+    def get_label_map(self):
+        class_nums = self.class_nums()
+        label_map = {}
+        for k, lst in class_nums.items():
+            label_map[k] = {i: l for i, l in enumerate(lst)}
+        return label_map
         
     def prepare_data(self):
         pass
@@ -54,6 +61,7 @@ class JsonDataModule(pl.LightningDataModule):
             print("OUTPUT:", name)
             total = sum(cnt for cls, cnt in cntr.items())
             for cls,cnt in cntr.most_common():
+                cls = self.class_nums()[name][cls]
                 print(f"{cls}   {cnt}/{total}={cnt/total*100:3.1f}")
             print()
 
@@ -123,6 +131,11 @@ class JsonDataModule(pl.LightningDataModule):
 
         # remove key, value pairs that are not used
         self.clean_data()
+
+        # Classes into numerical indices
+        for k, lst in self.class_nums().items():
+            for d in self.all_data:
+                d[k] = lst.index(d[k])
         
         random.shuffle(self.all_data)
         self.basic_stats(self.all_data)
@@ -130,11 +143,6 @@ class JsonDataModule(pl.LightningDataModule):
         # essays and prompts are in list, turn into string
         for d in self.all_data:
             d["essay"] = " ".join(d["essay"])
-
-        # Classes into numerical indices
-        for k, lst in self.class_nums().items():
-            for d in self.all_data:
-                d[k] = lst.index(d[k])
 
         # Split to train-dev-test
         dev_start,test_start=int(len(self.all_data)*0.8),int(len(self.all_data)*0.9)

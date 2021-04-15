@@ -50,9 +50,9 @@ if __name__=="__main__":
     # TODO: instead of tensor
     from evaluate import evaluate
     print("Validation set")
-    evaluate(data.val_dataloader(), model)
+    evaluate(data.val_dataloader(), model, data.get_label_map())
     print("Training set")
-    evaluate(data.train_dataloader(), model)
+    evaluate(data.train_dataloader(), model, data.get_label_map())
 
 
     
