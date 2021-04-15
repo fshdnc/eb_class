@@ -29,6 +29,8 @@ class JsonDataModule(pl.LightningDataModule):
     def get_class_weights(self):
         print("Training set:")
         occurrences = self.basic_stats(self.train, get=True) # Dict[name]=List(class occurrences)
+        print("Dev set:")
+        self.basic_stats(self.dev)
 
         # from occurrences to weights
         # https://www.analyticsvidhya.com/blog/2020/10/improve-class-imbalance-class-weights/
@@ -128,7 +130,12 @@ class JsonDataModule(pl.LightningDataModule):
         # essays and prompts are in list, turn into string
         for d in self.all_data:
             d["essay"] = " ".join(d["essay"])
-        
+
+        # Classes into numerical indices
+        for k, lst in self.class_nums().items():
+            for d in self.all_data:
+                d[k] = lst.index(d[k])
+
         # Split to train-dev-test
         dev_start,test_start=int(len(self.all_data)*0.8),int(len(self.all_data)*0.9)
         self.train=self.all_data[:dev_start]
@@ -145,10 +152,6 @@ class JsonDataModule(pl.LightningDataModule):
         tokenizer = transformers.BertTokenizer.from_pretrained(self.bert_model_name,truncation=True)
         self.tokenize(self.all_data, tokenizer)
 
-        # Classes into numerical indices
-        for k, lst in self.class_nums().items():
-            for d in self.all_data:
-                d[k] = lst.index(d[k])
                 
     def data_sizes(self):
         return len(self.train), len(self.dev), len(self.test)
