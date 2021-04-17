@@ -15,6 +15,7 @@ if __name__=="__main__":
     parser.add_argument('--bert_path', default='TurkuNLP/bert-base-finnish-cased-v1')
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--epochs', type=int, default=3)
+    parser.add_argument('--lr', type=float, default=1e-5)
     parser.add_argument('--jsons',nargs="+",help="JSON(s) with the data")
 
 
@@ -27,10 +28,11 @@ if __name__=="__main__":
     train_len, dev_len, test_len = data.data_sizes()
 
     class_weights = data.get_class_weights()
-
+    
+    #model = model.ProjectionClassModel(data.class_nums(),
     model = model.ClassModel(data.class_nums(),
                              bert_model=args.bert_path,
-                             lr=1e-6,
+                             lr=args.lr,
                              num_training_steps=train_len//args.batch_size*args.epochs,
                              class_weights={k: v.cuda() for k, v in class_weights.items()})
     os.system("rm -rf lightnint_logs")
