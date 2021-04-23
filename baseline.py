@@ -1,7 +1,9 @@
 import os, sys, argparse
+import datetime
 import torch
 import numpy
 import pytorch_lightning as pl
+from pytorch_lightning.callbacks import ModelCheckpoint
 import torch.nn.functional as F
 from sklearn.metrics import confusion_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -32,7 +34,7 @@ class TFIDFModel(AbstractModel):
         enc = torch.from_numpy(enc.toarray()).float().cuda()
         return {name: layer(enc) for name, layer in self.cls_layers.items()}
         
-def evaluate(dataloader, model, label_map, plot_conf_mat=False):
+def evaluate(dataloader, model, label_map, plot_conf_mat=False, fname=None):
     # only the model input differs from the regular eval
     with torch.no_grad():
         preds = []
@@ -56,7 +58,7 @@ def evaluate(dataloader, model, label_map, plot_conf_mat=False):
     conf_mat = confusion_matrix(preds, target, labels=[l for i, l in label_map["lab_grade"].items()])
     print("Confusion matrix:\n", conf_mat)
     if plot_conf_mat:
-        plot_confusion_matrix(conf_mat, label_map["lab_grade"], fname=None)
+        plot_confusion_matrix(conf_mat, label_map["lab_grade"], fname=fname)
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
@@ -69,6 +71,7 @@ if __name__=="__main__":
 
 
     args = parser.parse_args()
+    run_id = str(datetime.datetime.now()).replace(":","").replace(" ","_")
 
     data = data_reader.JsonDataModule(args.jsons,
                                       batch_size=args.batch_size,
@@ -84,12 +87,19 @@ if __name__=="__main__":
                                       num_training_steps=train_len//args.batch_size*args.epochs,
                                       class_weights={k: v.cuda() for k, v in class_weights.items()})
     os.system("rm -rf lightnint_logs")
-    logger = pl.loggers.TensorBoardLogger("lightning_logs", version="latest", name="baseline")
+    logger = pl.loggers.TensorBoardLogger("lightning_logs",
+                                          name="baseline",
+                                          version=run_id)
+    checkpoint_callback = ModelCheckpoint(monitor='val_acc_lab_grade',
+                                          filename="{epoch:02d}-{val_acc_lab_grade:.2f}",
+                                          save_top_k=1,
+                                          mode="max")
     trainer = pl.Trainer(gpus=1,
                          max_epochs=args.epochs,
                          progress_bar_refresh_rate=1,
                          log_every_n_steps=1,
-                         logger=logger)
+                         logger=logger,
+                         callbacks=[checkpoint_callback])
     trainer.fit(model, datamodule=data)
 
     model.eval()
@@ -98,7 +108,7 @@ if __name__=="__main__":
     print("Training set")
     evaluate(data.train_dataloader(), model, data.get_label_map())
     print("Validation set")
-    evaluate(data.val_dataloader(), model, data.get_label_map(), plot_conf_mat=True)
+    evaluate(data.val_dataloader(), model, data.get_label_map(), plot_conf_mat=True, fname=run_id)
 
 
     

@@ -1,8 +1,10 @@
 import argparse
+import datetime
 import pytorch_lightning as pl
 import sys
 import data_reader, model
 import os
+from pytorch_lightning.callbacks import ModelCheckpoint
 
 # for debugging
 def print_n_return(item):
@@ -20,6 +22,7 @@ if __name__=="__main__":
 
 
     args = parser.parse_args()
+    run_id = str(datetime.datetime.now()).replace(":","").replace(" ","_")
 
     data = data_reader.JsonDataModule(args.jsons,
                                       batch_size=args.batch_size,
@@ -35,13 +38,20 @@ if __name__=="__main__":
                              lr=args.lr,
                              num_training_steps=train_len//args.batch_size*args.epochs,
                              class_weights={k: v.cuda() for k, v in class_weights.items()})
-    os.system("rm -rf lightnint_logs")
-    logger = pl.loggers.TensorBoardLogger("lightning_logs", version="latest", name="ebm")
+    #os.system("rm -rf lightning_logs")
+    logger = pl.loggers.TensorBoardLogger("lightning_logs",
+                                          name=run_id,
+                                          version="latest")
+    checkpoint_callback = ModelCheckpoint(monitor='val_acc_lab_grade',
+                                          filename="baseline-{epoch:02d}-{val_acc_lab_grade:.2f}",
+                                          save_top_k=1,
+                                          mode="max")
     trainer = pl.Trainer(gpus=1,
                          max_epochs=args.epochs,
                          progress_bar_refresh_rate=1,
                          log_every_n_steps=1,
-                         logger=logger)
+                         logger=logger,
+                         callbacks=[checkpoint_callback])
     trainer.fit(model, datamodule=data)
 
     model.eval()

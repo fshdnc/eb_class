@@ -49,7 +49,7 @@ class AbstractModel(pl.LightningModule):
         scheduler = {'scheduler': scheduler, 'interval': 'step', 'frequency': 1}
         return [optimizer], [scheduler]
 
-    
+
 class ClassModel(AbstractModel):
 
     def __init__(self, class_nums, bert_model="TurkuNLP/bert-base-finnish-cased-v1", class_weights=None, **config):
@@ -73,14 +73,6 @@ class ClassModel(AbstractModel):
                         attention_mask=batch['attention_mask'],
                         token_type_ids=batch['token_type_ids']) #BxS_LENxSIZE; BxSIZE
         return {name: layer(enc.pooler_output) for name, layer in self.cls_layers.items()}
-
-            loss = F.cross_entropy(out[name], batch[name], weight=self.class_weights[name])
-            losses.append(loss)
-            acc = self.train_acc[name](out[name], batch[name])
-            self.log(f'train_acc_{name}', acc*100)
-            self.log(f'train_loss_{name}', loss)
-            pbar["acc_"+name] = f"{acc*100:03.1f}"
-        return {"loss":sum(losses), "progress_bar":pbar}
 
 
 class ProjectionClassModel(AbstractModel):
