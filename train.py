@@ -28,7 +28,7 @@ if __name__=="__main__":
     train_len, dev_len, test_len = data.data_sizes()
 
     class_weights = data.get_class_weights()
-    
+
     #model = model.ProjectionClassModel(data.class_nums(),
     model = model.ClassModel(data.class_nums(),
                              bert_model=args.bert_path,
@@ -51,10 +51,11 @@ if __name__=="__main__":
     #evaluate(dataloader, dataset, model, model_output_to_p, save_directory=None):
     # TODO: instead of tensor
     from evaluate import evaluate
-    print("Validation set")
-    evaluate(data.val_dataloader(), model, data.get_label_map())
     print("Training set")
     evaluate(data.train_dataloader(), model, data.get_label_map())
+    print("Validation set")
+    evaluate(data.val_dataloader(), model, data.get_label_map(), plot_conf_mat=True)
+
 
 
     
