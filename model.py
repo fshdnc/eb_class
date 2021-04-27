@@ -2,6 +2,7 @@ import pytorch_lightning as pl
 import torch.nn.functional as F
 import transformers
 import torch
+import gc
 
 class AbstractModel(pl.LightningModule):
 
@@ -51,6 +52,41 @@ class AbstractModel(pl.LightningModule):
 
 
 class ClassModel(AbstractModel):
+
+    def __init__(self, class_nums, bert_model="TurkuNLP/bert-base-finnish-cased-v1", class_weights=None, **config):
+        """
+        an essay is represented by average bert encodings of each sentence
+        class_weights: Dict[name]=torch.Tesnor([weights])
+        """
+        super().__init__()
+        self.bert = transformers.BertModel.from_pretrained(bert_model)
+        self.cls_layers = torch.nn.ModuleDict({name: torch.nn.Linear(self.bert.config.hidden_size, len(lst)) for name, lst in class_nums.items()})
+        self.train_acc = torch.nn.ModuleDict({name: pl.metrics.Accuracy() for name in class_nums})
+        self.val_acc = torch.nn.ModuleDict({name: pl.metrics.Accuracy() for name in class_nums})
+        if class_weights==None:
+            self.class_weights = {name: None for name in class_nums}
+        else:
+            self.class_weights = class_weights
+        self.config = config
+
+
+    def forward(self, batch):
+        first = True
+        enc = None
+        for i in range(len(batch["input_ids"])):
+            gc.collect()
+            sample_enc = self.bert(input_ids=batch['input_ids'][i],
+                                   attention_mask=batch['attention_mask'][i],
+                                   token_type_ids=batch['token_type_ids'][i]) #BxS_LENxSIZE; BxSIZE
+            sample_enc = torch.unsqueeze(torch.mean(sample_enc.pooler_output, 0), 0)
+            if first:
+                enc = sample_enc
+                first = False
+            else:
+                enc = torch.cat((enc, sample_enc), dim=0)
+        return {name: layer(enc) for name, layer in self.cls_layers.items()}
+
+class WholeEssayClassModel(AbstractModel):
 
     def __init__(self, class_nums, bert_model="TurkuNLP/bert-base-finnish-cased-v1", class_weights=None, **config):
         """

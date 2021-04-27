@@ -33,7 +33,7 @@ if __name__=="__main__":
     class_weights = data.get_class_weights()
 
     #model = model.ProjectionClassModel(data.class_nums(),
-    model = model.ClassModel(data.class_nums(),
+    model = model.WholeEssayClassModel(data.class_nums(),
                              bert_model=args.bert_path,
                              lr=args.lr,
                              num_training_steps=train_len//args.batch_size*args.epochs,

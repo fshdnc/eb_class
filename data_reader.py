@@ -91,10 +91,12 @@ class JsonDataModule(pl.LightningDataModule):
         print("AFTER", len(self.all_data))
 
     def clean_data(self):
+        keep = ["essay", "lemma", "sents"]
+        #keep = ["sents"]
         for data in self.all_data:
             remove = []
             for k in data.keys():
-                if k=="essay" or k.startswith("lab_"):
+                if k in keep or k.startswith("lab_"):
                     pass
                 else:
                     remove.append(k)
@@ -109,15 +111,24 @@ class JsonDataModule(pl.LightningDataModule):
                 essays_processed.append({k:(v if k!="essay" else pcs) for k,v in d.items()})
         return essays_processed
     
-    def tokenize(self, data, tokenizer):
+    def tokenize_whole_essay(self, data, tokenizer):
         # Tokenize and gather input ids, token type ids and attention masks which we need for the model
         tokenized = tokenizer([d["essay"] for d in data],
+                              padding="longest",
                               truncation="longest_first",
                               max_length=512)
         for d,input_ids,token_type_ids,attention_mask in zip(data,tokenized["input_ids"], tokenized["token_type_ids"], tokenized["attention_mask"]):
             d["input_ids"]=torch.LongTensor(input_ids)
             d["token_type_ids"]=torch.LongTensor(token_type_ids)
             d["attention_mask"]=torch.LongTensor(attention_mask)
+            
+    def tokenize(self, data, tokenizer):
+        # Tokenize and gather input ids, token type ids and attention masks which we need for the model
+        for d in data:
+            tokenized = tokenizer(d["sents"], padding="longest",truncation="longest_first", max_length=512)
+            d["input_ids"] = torch.LongTensor(tokenized["input_ids"])
+            d["token_type_ids"] = torch.LongTensor(tokenized["token_type_ids"])
+            d["attention_mask"] = torch.LongTensor(tokenized["attention_mask"])
                     
     def setup(self):
         # Read in from the JSONs
@@ -140,10 +151,6 @@ class JsonDataModule(pl.LightningDataModule):
         random.shuffle(self.all_data)
         self.basic_stats(self.all_data)
 
-        # essays and prompts are in list, turn into string
-        for d in self.all_data:
-            d["essay"] = " ".join(d["essay"])
-
         # Split to train-dev-test
         dev_start,test_start=int(len(self.all_data)*0.8),int(len(self.all_data)*0.9)
         self.train=self.all_data[:dev_start]
@@ -158,7 +165,13 @@ class JsonDataModule(pl.LightningDataModule):
         
         # tokenization
         tokenizer = transformers.BertTokenizer.from_pretrained(self.bert_model_name,truncation=True)
-        self.tokenize(self.all_data, tokenizer)
+        try:
+            self.tokenize(self.all_data, tokenizer)
+        except KeyError:
+            # essays and prompts are in list, turn into string
+            for d in self.all_data:
+                d["essay"] = " ".join(d["essay"])
+            self.tokenize_whole_essay(self.all_data, tokenizer)
 
                 
     def data_sizes(self):
@@ -197,7 +210,8 @@ def collate_tensors_fn(items):
 
     batch_dict={}
     for k in pad_these:
-        batch_dict[k]=torch.nn.utils.rnn.pad_sequence([item[k] for item in items],batch_first=True)
+        #batch_dict[k]=torch.nn.utils.rnn.pad_sequence([item[k] for item in items],batch_first=True)
+        batch_dict[k] = [item[k] for item in items]
     for k in tensor_these:
         batch_dict[k]=torch.LongTensor([item[k] for item in items])
     for k in list_these:

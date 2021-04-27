@@ -37,9 +37,9 @@ if __name__=="__main__":
     train_len, dev_len, test_len = data.data_sizes()
 
     # vectorize the data
-    X_train = [d["essay"][:1500] for d in data.train]
+    X_train = [" ".join(d["lemma"]) for d in data.train]
     Y_train = [d["lab_grade"] for d in data.train]
-    X_dev = [d["essay"][:1500] for d in data.dev]
+    X_dev = [" ".join(d["lemma"]) for d in data.dev]
     Y_dev = [d["lab_grade"] for d in data.dev]
     vectorizer = TfidfVectorizer(ngram_range=(2,5), analyzer="char_wb") #,stop_words=stop_words)
     vectorizer.fit(X_train)
