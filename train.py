@@ -5,6 +5,7 @@ import sys
 import data_reader, model
 import os
 from pytorch_lightning.callbacks import ModelCheckpoint
+#from transformers import TrainingArguments
 
 # for debugging
 def print_n_return(item):
@@ -19,6 +20,7 @@ if __name__=="__main__":
     parser.add_argument('--epochs', type=int, default=3)
     parser.add_argument('--lr', type=float, default=1e-5)
     parser.add_argument('--jsons',nargs="+",help="JSON(s) with the data")
+    parser.add_argument('--grad_acc', type=int, default=1)
 
 
     args = parser.parse_args()
@@ -33,7 +35,8 @@ if __name__=="__main__":
     class_weights = data.get_class_weights()
 
     #model = model.ProjectionClassModel(data.class_nums(),
-    model = model.WholeEssayClassModel(data.class_nums(),
+    #model = model.WholeEssayClassModel(data.class_nums(),
+    model = model.ClassModel(data.class_nums(),
                              bert_model=args.bert_path,
                              lr=args.lr,
                              num_training_steps=train_len//args.batch_size*args.epochs,
@@ -47,6 +50,7 @@ if __name__=="__main__":
                                           save_top_k=1,
                                           mode="max")
     trainer = pl.Trainer(gpus=1,
+                         accumulate_grad_batches=args.grad_acc,
                          max_epochs=args.epochs,
                          progress_bar_refresh_rate=1,
                          log_every_n_steps=1,
