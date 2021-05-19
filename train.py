@@ -21,26 +21,36 @@ if __name__=="__main__":
     parser.add_argument('--lr', type=float, default=1e-5)
     parser.add_argument('--jsons',nargs="+",help="JSON(s) with the data")
     parser.add_argument('--grad_acc', type=int, default=1)
+    parser.add_argument('--model_type', default="sentences", help="whole_essay or sentences")
 
 
     args = parser.parse_args()
+    assert args.model_type in ["whole_essay", "sentences"]
+    if args.model_type=="sentences":
+        for j in args.jsons:
+            assert "parsed" in j
+    print(args)
     run_id = str(datetime.datetime.now()).replace(":","").replace(" ","_")
 
     data = data_reader.JsonDataModule(args.jsons,
                                       batch_size=args.batch_size,
-                                      bert_model_name=args.bert_path)
+                                      bert_model_name=args.bert_path,
+                                      model_type=args.model_type)
     data.setup()
     train_len, dev_len, test_len = data.data_sizes()
 
     class_weights = data.get_class_weights()
 
+    if args.model_type=="whole_essay":
+        m = model.WholeEssayClassModel
+    elif args.model_type=="sentences":
+        m = model.ClassModel
     #model = model.ProjectionClassModel(data.class_nums(),
-    #model = model.WholeEssayClassModel(data.class_nums(),
-    model = model.ClassModel(data.class_nums(),
-                             bert_model=args.bert_path,
-                             lr=args.lr,
-                             num_training_steps=train_len//args.batch_size*args.epochs,
-                             class_weights={k: v.cuda() for k, v in class_weights.items()})
+    model = m(data.class_nums(),
+              bert_model=args.bert_path,
+              lr=args.lr,
+              num_training_steps=train_len//args.batch_size*args.epochs,
+              class_weights={k: v.cuda() for k, v in class_weights.items()})
     #os.system("rm -rf lightning_logs")
     logger = pl.loggers.TensorBoardLogger("lightning_logs",
                                           name=run_id,
@@ -66,9 +76,9 @@ if __name__=="__main__":
     # TODO: instead of tensor
     from evaluate import evaluate
     print("Training set")
-    evaluate(data.train_dataloader(), model, data.get_label_map())
+    evaluate(data.train_dataloader(), model, data.get_label_map(), model_type=args.model_type)
     print("Validation set")
-    evaluate(data.val_dataloader(), model, data.get_label_map(), plot_conf_mat=True)
+    evaluate(data.val_dataloader(), model, data.get_label_map(), model_type=args.model_type, plot_conf_mat=True)
 
 
 

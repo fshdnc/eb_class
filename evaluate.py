@@ -50,19 +50,18 @@ def plot_confusion_matrix(conf_matrix, label_map, fname=None):
         fname = fname + ".png"
     plt.savefig(fname)
 
-def evaluate(dataloader, model, label_map, plot_conf_mat=False):
+def evaluate(dataloader, model, label_map, model_type, plot_conf_mat=False):
     with torch.no_grad():
         preds = []
         target = []
         for batch in dataloader:
             needed_for_prediction = ['input_ids', 'attention_mask', 'token_type_ids'] # some of the values cannot be put to gpu, filter those out
-            # whole essay
-            #output = model({k: v.cuda() for k, v in batch.items() if k in needed_for_prediction})
-            # sentence
-            output = model({k: [vv.cuda() for vv in v] for k, v in batch.items() if k in needed_for_prediction})
+            if model_type=="whole_essay":
+                output = model({k: v for k, v in batch.items() if k in needed_for_prediction})
+            elif model_type=="sentences":
+                output = model({k: [vv.cuda() for vv in v] for k, v in batch.items() if k in needed_for_prediction})
             preds.append(output) #["lab_grade"])
             target.append(batch["lab_grade"])
-            #output = model_output_to_p(model({k: v.cuda() for k, v in batch.items()}))
 
     preds = [v for item in preds for k,vs in item.items() for v in vs]
     preds = [int(torch.argmax(pred)) for pred in preds]

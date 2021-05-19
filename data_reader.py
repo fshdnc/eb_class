@@ -12,11 +12,12 @@ import preprocessing
 
 class JsonDataModule(pl.LightningDataModule):
 
-    def __init__(self,fnames_or_files,batch_size=20,bert_model_name="TurkuNLP/bert-base-finnish-cased-v1"):
+    def __init__(self, fnames_or_files, model_type, batch_size=20, bert_model_name="TurkuNLP/bert-base-finnish-cased-v1"):
         super().__init__(self)
-        self.fnames=fnames_or_files
-        self.bert_model_name=bert_model_name
-        self.batch_size=batch_size
+        self.fnames = fnames_or_files
+        self.bert_model_name = bert_model_name
+        self.batch_size = batch_size
+        self.model_type = model_type
         #self.label_map = {0:5, 1:1, 2:2, 3:3, 4:4}
 
 
@@ -91,8 +92,10 @@ class JsonDataModule(pl.LightningDataModule):
         print("AFTER", len(self.all_data))
 
     def clean_data(self):
-        keep = ["essay", "lemma", "sents"]
-        #keep = ["sents"]
+        if self.model_type=="sentences":
+            keep = ["essay", "lemma", "sents"]
+        elif self.model_type=="whole_essay":
+            keep = ["essay"]
         for data in self.all_data:
             remove = []
             for k in data.keys():
@@ -165,9 +168,9 @@ class JsonDataModule(pl.LightningDataModule):
         
         # tokenization
         tokenizer = transformers.BertTokenizer.from_pretrained(self.bert_model_name,truncation=True)
-        try:
+        if self.model_type=="sentences": #try:
             self.tokenize(self.all_data, tokenizer)
-        except KeyError:
+        elif self.model_type=="whole_essay": #except KeyError:
             # essays and prompts are in list, turn into string
             for d in self.all_data:
                 d["essay"] = " ".join(d["essay"])
@@ -185,7 +188,7 @@ class JsonDataModule(pl.LightningDataModule):
                                            **kwargs)
         
     def train_dataloader(self):
-        return self.get_dataloader(self.train,shuffle=True)
+        return self.get_dataloader(self.train, shuffle=True)
 
     def val_dataloader(self):
         return self.get_dataloader(self.dev)
