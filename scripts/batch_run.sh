@@ -5,6 +5,7 @@ RESULT_FILE=$1
 SCRIPT=/home/lhchan/eb_class/scripts/run.sh
 # run
 for i in $(seq 20);do
+    echo -ne "$i\t"
     bash $SCRIPT 1>> $RESULT_FILE 2>/dev/null
 done
 

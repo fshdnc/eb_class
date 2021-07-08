@@ -2,12 +2,11 @@
 
 import torch
 from sklearn.metrics import confusion_matrix
+import matplotlib.pyplot as plt
+import numpy
+import datetime
 
 def plot_confusion_matrix(conf_matrix, label_map, fname=None):
-    import matplotlib.pyplot as plt
-    import numpy
-    import datetime
-    
     norm_conf = []
     for i in conf_matrix:
         a = 0
@@ -63,6 +62,7 @@ def evaluate(dataloader, model, label_map, model_type, plot_conf_mat=False):
             preds.append(output) #["lab_grade"])
             target.append(batch["lab_grade"])
 
+    # accuracy
     preds = [v for item in preds for k,vs in item.items() for v in vs]
     preds = [int(torch.argmax(pred)) for pred in preds]
     preds = [label_map["lab_grade"][p] for p in preds]
@@ -74,9 +74,18 @@ def evaluate(dataloader, model, label_map, model_type, plot_conf_mat=False):
     assert len(preds)==len(target)
     corrects = [1 if p==t else 0 for p, t in zip(preds,target)]
     print("Acc\t{}".format(sum(corrects)/len(corrects)))
+
+
+    
+    # class number
     print("Predicted class number:",len(set(preds)))
+
+    # confusion matrix
     conf_mat = confusion_matrix(preds, target, labels=[l for i, l in label_map["lab_grade"].items()])
     print("Confusion matrix:\n", conf_mat)
     if plot_conf_mat:
         plot_confusion_matrix(conf_mat, label_map["lab_grade"], fname=None)
 
+    # Pearson's correlation
+    rho = numpy.corrcoef(numpy.array(preds), numpy.array(target))
+    print("Pearson's correlation:", rho[0][1])
