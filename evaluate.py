@@ -75,7 +75,9 @@ def evaluate(dataloader, model, label_map, model_type, plot_conf_mat=False):
     corrects = [1 if p==t else 0 for p, t in zip(preds,target)]
     print("Acc\t{}".format(sum(corrects)/len(corrects)))
 
-
+    # Pearson's correlation
+    rho = numpy.corrcoef(numpy.array([int(p) for p in preds]), numpy.array([int(t) for t in target]))
+    print("Pearson's correlation:", rho[0][1])
     
     # class number
     print("Predicted class number:",len(set(preds)))
@@ -86,6 +88,4 @@ def evaluate(dataloader, model, label_map, model_type, plot_conf_mat=False):
     if plot_conf_mat:
         plot_confusion_matrix(conf_mat, label_map["lab_grade"], fname=None)
 
-    # Pearson's correlation
-    rho = numpy.corrcoef(numpy.array(preds), numpy.array(target))
-    print("Pearson's correlation:", rho[0][1])
+
