@@ -94,7 +94,7 @@ class JsonDataModule(pl.LightningDataModule):
     def clean_data(self):
         if self.model_type=="sentences":
             keep = ["essay", "lemma", "sents"]
-        elif self.model_type=="whole_essay":
+        elif "essay" in self.model_type: # "whole_essay" or "trunc_essay"
             keep = ["essay"]
         for data in self.all_data:
             remove = []
@@ -114,7 +114,7 @@ class JsonDataModule(pl.LightningDataModule):
                 essays_processed.append({k:(v if k!="essay" else pcs) for k,v in d.items()})
         return essays_processed
     
-    def tokenize_whole_essay(self, data, tokenizer):
+    def tokenize_trunc_essay(self, data, tokenizer):
         # Tokenize and gather input ids, token type ids and attention masks which we need for the model
         tokenized = tokenizer([d["essay"] for d in data],
                               padding="longest",
@@ -125,6 +125,14 @@ class JsonDataModule(pl.LightningDataModule):
             d["token_type_ids"]=torch.LongTensor(token_type_ids)
             d["attention_mask"]=torch.LongTensor(attention_mask)
             
+    def tokenize_whole_essay(self, data, tokenizer):
+        # Tokenize -> chunk -> add special token
+        for d in data:
+            tokenized = tokenizer(d["essay"], padding=True, truncation='longest_first', max_length=512, return_overflowing_tokens=True, stride=10, return_offsets_mapping=True)
+            d["input_ids"] = torch.LongTensor(tokenized["input_ids"])
+            d["token_type_ids"] = torch.LongTensor(tokenized["token_type_ids"])
+            d["attention_mask"] = torch.LongTensor(tokenized["attention_mask"])
+
     def tokenize(self, data, tokenizer):
         # Tokenize and gather input ids, token type ids and attention masks which we need for the model
         for d in data:
@@ -167,11 +175,17 @@ class JsonDataModule(pl.LightningDataModule):
         self.basic_stats(self.all_data)
         
         # tokenization
-        tokenizer = transformers.BertTokenizer.from_pretrained(self.bert_model_name,truncation=True)
         if self.model_type=="sentences": #try:
+            tokenizer = transformers.BertTokenizer.from_pretrained(self.bert_model_name,truncation=True)
             self.tokenize(self.all_data, tokenizer)
-        elif self.model_type=="whole_essay": #except KeyError:
+        elif self.model_type=="trunc_essay": #except KeyError:
+            tokenizer = transformers.BertTokenizer.from_pretrained(self.bert_model_name,truncation=True)
             # essays and prompts are in list, turn into string
+            for d in self.all_data:
+                d["essay"] = " ".join(d["essay"])
+            self.tokenize_trunc_essay(self.all_data, tokenizer)
+        elif self.model_type == "whole_essay":
+            tokenizer = transformers.BertTokenizerFast.from_pretrained(self.bert_model_name,truncation=True)
             for d in self.all_data:
                 d["essay"] = " ".join(d["essay"])
             self.tokenize_whole_essay(self.all_data, tokenizer)

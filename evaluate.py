@@ -55,9 +55,9 @@ def evaluate(dataloader, model, label_map, model_type, plot_conf_mat=False):
         target = []
         for batch in dataloader:
             needed_for_prediction = ['input_ids', 'attention_mask', 'token_type_ids'] # some of the values cannot be put to gpu, filter those out
-            if model_type=="whole_essay":
+            if model_type=="trunc_essay":
                 output = model({k: v for k, v in batch.items() if k in needed_for_prediction})
-            elif model_type=="sentences":
+            elif model_type=="sentences" or "whole_essay":
                 output = model({k: [vv.cuda() for vv in v] for k, v in batch.items() if k in needed_for_prediction})
             preds.append(output) #["lab_grade"])
             target.append(batch["lab_grade"])

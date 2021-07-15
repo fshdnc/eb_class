@@ -21,11 +21,11 @@ if __name__=="__main__":
     parser.add_argument('--lr', type=float, default=1e-5)
     parser.add_argument('--jsons',nargs="+",help="JSON(s) with the data")
     parser.add_argument('--grad_acc', type=int, default=1)
-    parser.add_argument('--model_type', default="sentences", help="whole_essay or sentences")
+    parser.add_argument('--model_type', default="sentences", help="trunc_essay, whole_essay, or sentences")
 
 
     args = parser.parse_args()
-    assert args.model_type in ["whole_essay", "sentences"]
+    assert args.model_type in ["whole_essay", "sentences", "trunc_essay"]
     if args.model_type=="sentences":
         for j in args.jsons:
             assert "parsed" in j
@@ -45,6 +45,8 @@ if __name__=="__main__":
         m = model.WholeEssayClassModel
     elif args.model_type=="sentences":
         m = model.ClassModel
+    elif args.model_type=="trunc_essay":
+        m = model.TruncEssayClassModel
     #model = model.ProjectionClassModel(data.class_nums(),
     model = m(data.class_nums(),
               bert_model=args.bert_path,
@@ -65,7 +67,8 @@ if __name__=="__main__":
                          progress_bar_refresh_rate=1,
                          log_every_n_steps=1,
                          logger=logger,
-                         callbacks=[checkpoint_callback])
+                         callbacks=[checkpoint_callback],
+                         fast_dev_run=False)
     trainer.fit(model, datamodule=data)
 
     model.eval()
