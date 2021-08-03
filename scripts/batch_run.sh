@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 
 RESULT_FILE=$1
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 
-SCRIPT=/home/lhchan/eb_class/scripts/run.sh
+SCRIPT=$SCRIPTPATH/run.sh
 # run
 for i in $(seq 20);do
     echo -ne "$i\t"

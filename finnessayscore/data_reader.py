@@ -8,7 +8,7 @@ import pytorch_lightning as pl
 import transformers
 import torch
 
-import preprocessing
+from finnessayscore import preprocessing
 
 class JsonDataModule(pl.LightningDataModule):
 

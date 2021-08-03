@@ -7,9 +7,9 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 import torch.nn.functional as F
 from sklearn.metrics import confusion_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
-import data_reader
-from model import AbstractModel
-from evaluate import plot_confusion_matrix
+from finnessayscore import data_reader
+from finnessayscore.model import AbstractModel
+from finnessayscore.evaluate import plot_confusion_matrix
 
 class TFIDFModel(AbstractModel):
 

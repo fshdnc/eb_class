@@ -4,7 +4,7 @@ import numpy
 import sklearn.svm
 from sklearn.metrics import confusion_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
-import data_reader
+from finnessayscore import data_reader
 from evaluate import plot_confusion_matrix
 
 def evaluate(label_map, classifier, X, Y, confusion_matrix_filename=None):

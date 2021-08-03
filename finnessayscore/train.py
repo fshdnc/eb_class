@@ -2,7 +2,8 @@ import argparse
 import datetime
 import pytorch_lightning as pl
 import sys
-import data_reader, model
+from finnessayscore import data_reader
+from finnessayscore import model
 import os
 from pytorch_lightning.callbacks import ModelCheckpoint
 #from transformers import TrainingArguments
@@ -77,7 +78,7 @@ if __name__=="__main__":
     #evaluate(dataloader, dataset, model, model_output_to_p, save_directory='plots')
     #evaluate(dataloader, dataset, model, model_output_to_p, save_directory=None):
     # TODO: instead of tensor
-    from evaluate import evaluate
+    from finnessayscore.evaluate import evaluate
     print("Training set")
     evaluate(data.train_dataloader(), model, data.get_label_map(), model_type=args.model_type)
     print("Validation set")
