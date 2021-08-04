@@ -19,8 +19,10 @@ ADD pyproject.toml poetry.lock /finnessayscore/
 
 RUN poetry export \
       --without-hashes > requirements.txt && \
+    sed -i '/pytorch/d' requirements.txt && \
     python3 -m pip install -r requirements.txt && \
     rm requirements.txt && \
+    pip3 install torch==1.9.0+cu111 torchvision==0.10.0+cu111 torchaudio==0.9.0 -f https://download.pytorch.org/whl/torch_stable.html && \
     rm -rf /root/.cache
 
 RUN echo "/finnessayscore" > \
