@@ -12,14 +12,14 @@ from finnessayscore import preprocessing
 
 class JsonDataModule(pl.LightningDataModule):
 
-    def __init__(self, fnames_or_files, model_type, batch_size=20, bert_model_name="TurkuNLP/bert-base-finnish-cased-v1"):
+    def __init__(self, fnames_or_files, model_type, batch_size=20, bert_model_name="TurkuNLP/bert-base-finnish-cased-v1", **config):
         super().__init__(self)
         self.fnames = fnames_or_files
         self.bert_model_name = bert_model_name
         self.batch_size = batch_size
         self.model_type = model_type
         #self.label_map = {0:5, 1:1, 2:2, 3:3, 4:4}
-
+        self.config = config
 
     def class_nums(self):
         return {"lab_grade": ["1","2","3","4","5"]}
@@ -128,7 +128,9 @@ class JsonDataModule(pl.LightningDataModule):
     def tokenize_whole_essay(self, data, tokenizer):
         # Tokenize -> chunk -> add special token
         for d in data:
-            tokenized = tokenizer(d["essay"], padding=True, truncation='longest_first', max_length=512, return_overflowing_tokens=True, stride=10, return_offsets_mapping=True)
+            tokenized = tokenizer(d["essay"], padding=True, truncation='longest_first', max_length=512, return_overflowing_tokens=True, stride=self.config["stride"], return_offsets_mapping=True)
+            #weights = sum([ for tokenized["attention_mask"]])
+            #d["overflow_to_sample_mapping"] = tokenized["overflow_to_sample_mapping"]
             d["input_ids"] = torch.LongTensor(tokenized["input_ids"])
             d["token_type_ids"] = torch.LongTensor(tokenized["token_type_ids"])
             d["attention_mask"] = torch.LongTensor(tokenized["attention_mask"])
@@ -140,6 +142,15 @@ class JsonDataModule(pl.LightningDataModule):
             d["input_ids"] = torch.LongTensor(tokenized["input_ids"])
             d["token_type_ids"] = torch.LongTensor(tokenized["token_type_ids"])
             d["attention_mask"] = torch.LongTensor(tokenized["attention_mask"])
+
+    #def tokenize_sbert(self, data, tokenizer):
+        # Tokenize and gather input ids, token type ids and attention masks which we need for the model
+        # https://huggingface.co/sentence-transformers/bert-base-nli-mean-tokens
+    #    for d in data:
+    #        tokenized = tokenizer(d["sents"], padding="longest",truncation="longest_first", max_length=512)
+    #        d["input_ids"] = torch.LongTensor(tokenized["input_ids"])
+    #        d["token_type_ids"] = torch.LongTensor(tokenized["token_type_ids"])
+    #        d["attention_mask"] = torch.LongTensor(tokenized["attention_mask"])
                     
     def setup(self):
         # Read in from the JSONs
@@ -178,6 +189,10 @@ class JsonDataModule(pl.LightningDataModule):
         if self.model_type=="sentences": #try:
             tokenizer = transformers.BertTokenizer.from_pretrained(self.bert_model_name,truncation=True)
             self.tokenize(self.all_data, tokenizer)
+        elif self.model_type=="sbert":
+            tokenizer = transformers.AutoTokenizer.from_pretrained(self.bert_model_name) #, truncation=True)
+            self.tokenize(self.all_data, tokenizer)
+            #self.tokenize_sbert(self.all_data, tokenizer)
         elif self.model_type=="trunc_essay": #except KeyError:
             tokenizer = transformers.BertTokenizer.from_pretrained(self.bert_model_name,truncation=True)
             # essays and prompts are in list, turn into string
@@ -189,7 +204,8 @@ class JsonDataModule(pl.LightningDataModule):
             for d in self.all_data:
                 d["essay"] = " ".join(d["essay"])
             self.tokenize_whole_essay(self.all_data, tokenizer)
-
+            # debug
+            #self.all_data = [d for d in self.all_data if len(d['overflow_to_sample_mapping'])==1]
                 
     def data_sizes(self):
         return len(self.train), len(self.dev), len(self.test)

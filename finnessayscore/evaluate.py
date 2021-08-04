@@ -69,18 +69,22 @@ def evaluate(dataloader, model, label_map, model_type, plot_conf_mat=False):
     #values, preds = torch.max(torch.tensor(preds), dim=1)
     target = [int(tt) for t in target for tt in t]
     target = [label_map["lab_grade"][p] for p in target]
-    print("Predictions:", preds)
-    print("Gold standard:", target)
+    #print("Predictions:", preds)
+    #print("Gold standard:", target)
     assert len(preds)==len(target)
     corrects = [1 if p==t else 0 for p, t in zip(preds,target)]
-    print("Acc\t{}".format(sum(corrects)/len(corrects)))
+    acc = sum(corrects)/len(corrects)
+    #print("Acc\t{}".format(sum(corrects)/len(corrects)))
 
     # Pearson's correlation
     rho = numpy.corrcoef(numpy.array([int(p) for p in preds]), numpy.array([int(t) for t in target]))
-    print("Pearson's correlation:", rho[0][1])
+    #print("Pearson's correlation:", rho[0][1])
     
     # class number
-    print("Predicted class number:",len(set(preds)))
+    class_no = len(set(preds))
+    #print("Predicted class number:",len(set(preds)))
+
+    print("RESULTS\tacc\t{:.3f}\tpearson\t{:.3f}\tclass_no\t{}".format(acc, rho[0][1], class_no))
 
     # confusion matrix
     conf_mat = confusion_matrix(preds, target, labels=[l for i, l in label_map["lab_grade"].items()])

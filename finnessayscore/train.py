@@ -20,8 +20,11 @@ if __name__=="__main__":
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--epochs', type=int, default=3)
     parser.add_argument('--lr', type=float, default=1e-5)
+    parser.add_argument('--use_label_smoothing', default=False, action="store_true", help="Use label smoothing")
+    parser.add_argument('--smoothing', type=float, default=0, help="0: one-hot method, 0<x<1: smooth method")
     parser.add_argument('--jsons',nargs="+",help="JSON(s) with the data")
     parser.add_argument('--grad_acc', type=int, default=1)
+    parser.add_argument('--whole_essay_overlap', type=int, default=10)
     parser.add_argument('--model_type', default="sentences", help="trunc_essay, whole_essay, or sentences")
 
 
@@ -30,13 +33,16 @@ if __name__=="__main__":
     if args.model_type=="sentences":
         for j in args.jsons:
             assert "parsed" in j
+    if args.use_label_smoothing:
+        assert args.smoothing <1 and args.smoothing>=0
     print(args)
     run_id = str(datetime.datetime.now()).replace(":","").replace(" ","_")
 
     data = data_reader.JsonDataModule(args.jsons,
                                       batch_size=args.batch_size,
                                       bert_model_name=args.bert_path,
-                                      model_type=args.model_type)
+                                      model_type=args.model_type,
+                                      stride=args.whole_essay_overlap)
     data.setup()
     train_len, dev_len, test_len = data.data_sizes()
 
@@ -52,6 +58,7 @@ if __name__=="__main__":
     model = m(data.class_nums(),
               bert_model=args.bert_path,
               lr=args.lr,
+              label_smoothing=args.use_label_smoothing, smoothing=args.smoothing,
               num_training_steps=train_len//args.batch_size*args.epochs,
               class_weights={k: v.cuda() for k, v in class_weights.items()})
     #os.system("rm -rf lightning_logs")
@@ -83,8 +90,5 @@ if __name__=="__main__":
     evaluate(data.train_dataloader(), model, data.get_label_map(), model_type=args.model_type)
     print("Validation set")
     evaluate(data.val_dataloader(), model, data.get_label_map(), model_type=args.model_type, plot_conf_mat=True)
-
-
-
     
 
