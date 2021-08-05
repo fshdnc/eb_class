@@ -24,7 +24,7 @@ RUN poetry export \
     rm requirements.txt && \
     pip3 install torch==1.9.0+cu111 torchvision==0.10.0+cu111 torchaudio==0.9.0 -f https://download.pytorch.org/whl/torch_stable.html && \
     pip3 install pytorch-lightning && \
-    pip3 install -U scikit-learn matplotlib && \
+    pip3 install scikit-learn matplotlib && \
     rm -rf /root/.cache
 
 RUN echo "/finnessayscore" > \
