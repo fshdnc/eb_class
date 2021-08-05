@@ -19,13 +19,11 @@ ADD pyproject.toml poetry.lock /finnessayscore/
 
 RUN poetry export \
       --without-hashes > requirements.txt && \
-    echo requirements.txt && \
-    perl -pi -e 's/pytorch-lightning/LIGHTNING/g' requirements.txt && \
     sed -i '/pytorch/d' requirements.txt && \
-    perl -pi -e 's/LIGHTNING/pytorch-lightning/g' requirements.txt && \
     python3 -m pip install -r requirements.txt && \
     rm requirements.txt && \
     pip3 install torch==1.9.0+cu111 torchvision==0.10.0+cu111 torchaudio==0.9.0 -f https://download.pytorch.org/whl/torch_stable.html && \
+    pip3 install pytorch-lightning && \
     rm -rf /root/.cache
 
 RUN echo "/finnessayscore" > \
