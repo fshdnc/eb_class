@@ -115,11 +115,13 @@ class ClassModel(AbstractModel):
                 enc = torch.cat((enc, sample_enc), dim=0)
         return {name: self.softmax(layer(enc)) for name, layer in self.cls_layers.items()}
 
-class ClassModel(AbstractModel):
+'''
+class SbertClassModel(AbstractModel):
 
-    def __init__(self, class_nums, bert_model="TurkuNLP/bert-base-finnish-cased-v1", class_weights=None, **config):
+    def __init__(self, class_nums, sbert_model, class_weights=None, **config):
         """
-        an essay is represented by average bert encodings of each sentence
+        code modified from: https://huggingface.co/sentence-transformers/bert-base-nli-mean-tokens
+        an essay is represented by average sbert encodings of each sentence
         class_weights: Dict[name]=torch.Tesnor([weights])
         """
         super().__init__()
@@ -157,6 +159,7 @@ class ClassModel(AbstractModel):
             else:
                 enc = torch.cat((enc, sample_enc), dim=0)
         return {name: self.softmax(layer(enc)) for name, layer in self.cls_layers.items()}
+'''
 
 class WholeEssayClassModel(AbstractModel):
 

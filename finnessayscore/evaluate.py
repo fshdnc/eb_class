@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import torch
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, cohen_kappa_score
 import matplotlib.pyplot as plt
 import numpy
 import datetime
@@ -79,12 +79,15 @@ def evaluate(dataloader, model, label_map, model_type, plot_conf_mat=False):
     # Pearson's correlation
     rho = numpy.corrcoef(numpy.array([int(p) for p in preds]), numpy.array([int(t) for t in target]))
     #print("Pearson's correlation:", rho[0][1])
-    
+
+    # Quadratic Weighted Kappa
+    qwk = cohen_kappa_score(numpy.array([int(p) for p in preds]), numpy.array([int(t) for t in target]), weights='quadratic')
+
     # class number
     class_no = len(set(preds))
     #print("Predicted class number:",len(set(preds)))
 
-    print("RESULTS\tacc\t{:.3f}\tpearson\t{:.3f}\tclass_no\t{}".format(acc, rho[0][1], class_no))
+    print("RESULTS\tacc\t{:.3f}\tpearson\t{:.3f}\tQWK\t{:.3f}\tclass_no\t{}".format(acc, rho[0][1], qwk, class_no))
 
     # confusion matrix
     conf_mat = confusion_matrix(preds, target, labels=[l for i, l in label_map["lab_grade"].items()])
