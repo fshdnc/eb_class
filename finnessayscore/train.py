@@ -72,7 +72,7 @@ if __name__=="__main__":
     trainer = pl.Trainer(gpus=1,
                          accumulate_grad_batches=args.grad_acc,
                          max_epochs=args.epochs,
-                         progress_bar_refresh_rate=1,
+                         progress_bar_refresh_rate=0,
                          log_every_n_steps=1,
                          logger=logger,
                          callbacks=[checkpoint_callback],
