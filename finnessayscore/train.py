@@ -25,11 +25,11 @@ if __name__=="__main__":
     parser.add_argument('--jsons',nargs="+",help="JSON(s) with the data")
     parser.add_argument('--grad_acc', type=int, default=1)
     parser.add_argument('--whole_essay_overlap', type=int, default=10)
-    parser.add_argument('--model_type', default="sentences", help="trunc_essay, whole_essay, or sentences")
-
+    parser.add_argument('--model_type', default="sentences", help="trunc_essay, whole_essay, seg_essay, or sentences")
+    parser.add_argument('--max_length', type=int, default=512, help="max number of token used in the whole essay model")
 
     args = parser.parse_args()
-    assert args.model_type in ["whole_essay", "sentences", "trunc_essay"]
+    assert args.model_type in ["whole_essay", "sentences", "trunc_essay", "seg_essay"]
     if args.model_type=="sentences":
         for j in args.jsons:
             assert "parsed" in j
@@ -42,7 +42,8 @@ if __name__=="__main__":
                                       batch_size=args.batch_size,
                                       bert_model_name=args.bert_path,
                                       model_type=args.model_type,
-                                      stride=args.whole_essay_overlap)
+                                      stride=args.whole_essay_overlap,
+                                      max_token=args.max_length)
     data.setup()
     train_len, dev_len, test_len = data.data_sizes()
 
@@ -52,7 +53,7 @@ if __name__=="__main__":
         m = model.WholeEssayClassModel
     elif args.model_type=="sentences":
         m = model.ClassModel
-    elif args.model_type=="trunc_essay":
+    elif args.model_type in ["trunc_essay", "seg_essay"]:
         m = model.TruncEssayClassModel
     #model = model.ProjectionClassModel(data.class_nums(),
     model = m(data.class_nums(),

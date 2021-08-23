@@ -124,11 +124,28 @@ class JsonDataModule(pl.LightningDataModule):
             d["input_ids"]=torch.LongTensor(input_ids)
             d["token_type_ids"]=torch.LongTensor(token_type_ids)
             d["attention_mask"]=torch.LongTensor(attention_mask)
+
+    def tokenize_seg_essay(self, data, tokenizer):
+        # Tokenize and gather input ids, token type ids and attention masks which we need for the model
+        # One essay is cut into several segments, each of which becomes an example
+        tokenized = tokenizer([d["essay"] for d in data],
+                              padding="longest",
+                              truncation="longest_first",
+                              max_length=self.config["max_token"],
+                              return_overflowing_tokens=True, return_offsets_mapping=True)
+        new_data = []
+        for i, old_i in enumerate(tokenized["overflow_to_sample_mapping"]):
+            new_d = data[old_i]
+            new_d["input_ids"] = torch.LongTensor(tokenized["input_ids"][i])
+            new_d["token_type_ids"] = torch.LongTensor(tokenized["token_type_ids"][i])
+            new_d["attention_mask"] = torch.LongTensor(tokenized["attention_mask"][i])
+            new_data.append(new_d)
+        return new_data
             
     def tokenize_whole_essay(self, data, tokenizer):
         # Tokenize -> chunk -> add special token
         for d in data:
-            tokenized = tokenizer(d["essay"], padding=True, truncation='longest_first', max_length=512, return_overflowing_tokens=True, stride=self.config["stride"], return_offsets_mapping=True)
+            tokenized = tokenizer(d["essay"], padding=True, truncation='longest_first', max_length=self.config["max_token"], return_overflowing_tokens=True, stride=self.config["stride"], return_offsets_mapping=True)
             #weights = sum([ for tokenized["attention_mask"]])
             #d["overflow_to_sample_mapping"] = tokenized["overflow_to_sample_mapping"]
             d["input_ids"] = torch.LongTensor(tokenized["input_ids"])
@@ -206,7 +223,13 @@ class JsonDataModule(pl.LightningDataModule):
             self.tokenize_whole_essay(self.all_data, tokenizer)
             # debug
             #self.all_data = [d for d in self.all_data if len(d['overflow_to_sample_mapping'])==1]
-                
+        elif self.model_type=="seg_essay":
+            tokenizer = transformers.BertTokenizerFast.from_pretrained(self.bert_model_name,truncation=True)
+            for d in self.all_data:
+                d["essay"] = " ".join(d["essay"])
+            self.train = self.tokenize_seg_essay(self.train, tokenizer)
+            self.tokenize_trunc_essay(self.dev, tokenizer)
+
     def data_sizes(self):
         return len(self.train), len(self.dev), len(self.test)
     

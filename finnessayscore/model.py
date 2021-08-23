@@ -34,7 +34,7 @@ class AbstractModel(pl.LightningModule):
             self.log(f'train_loss_{name}', loss)
             pbar["acc_"+name] = f"{acc*100:03.1f}"
             qwk = self.train_qwk[name](out[name], batch[name])
-            self.log(f'train_qwk{name}', qwk)
+            self.log(f'train_qwk_{name}', qwk)
         return {"loss":sum(losses), "progress_bar":pbar}
 
     def training_epoch_end(self, _):
@@ -128,7 +128,7 @@ class WholeEssayClassModel(AbstractModel):
         self.softmax = torch.nn.Softmax(dim=1)
         self.train_acc = torch.nn.ModuleDict({name: torchmetrics.Accuracy() for name in class_nums})
         self.val_acc = torch.nn.ModuleDict({name: torchmetrics.Accuracy() for name in class_nums})
-self.train_qwk = torch.nn.ModuleDict({name: torchmetrics.CohenKappa(num_classes=len(lst), weights='quadratic') for name, lst in class_nums.items()})
+        self.train_qwk = torch.nn.ModuleDict({name: torchmetrics.CohenKappa(num_classes=len(lst), weights='quadratic') for name, lst in class_nums.items()})
         self.val_qwk = torch.nn.ModuleDict({name: torchmetrics.CohenKappa(num_classes=len(lst), weights='quadratic') for name, lst in class_nums.items()})
         if class_weights==None:
             self.class_weights = {name: None for name in class_nums}
