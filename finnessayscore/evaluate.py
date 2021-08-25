@@ -49,26 +49,66 @@ def plot_confusion_matrix(conf_matrix, label_map, fname=None):
         fname = fname + ".png"
     plt.savefig(fname)
 
-def evaluate(dataloader, model, label_map, model_type, plot_conf_mat=False):
+def _evaluate_seg_essay(dataloader, model, label_map):
+    """
+    Predictions for model type seg_essay, where an essay is chopped into several fragments, each used as an independent sample
+    """
     with torch.no_grad():
         preds = []
         target = []
+        overflow2sample_mapping = []
         for batch in dataloader:
-            needed_for_prediction = ['input_ids', 'attention_mask', 'token_type_ids'] # some of the values cannot be put to gpu, filter those out
-            if model_type in ["trunc_essay", "seg_essay"]:
-                output = model({k: v for k, v in batch.items() if k in needed_for_prediction})
-            elif model_type in ["sentences", "whole_essay"]:
-                output = model({k: [vv.cuda() for vv in v] for k, v in batch.items() if k in needed_for_prediction})
+            needed_for_prediction = ['input_ids', 'attention_mask', 'token_type_ids', "overflow_to_sample_mapping"] # some of the values cannot be put to gpu, filter those out
+            output = model({k: v for k, v in batch.items() if k in needed_for_prediction})
             preds.append(output) #["lab_grade"])
             target.append(batch["lab_grade"])
+            overflow2sample_mapping.append(batch["overflow_to_sample_mapping"])
+        # accuracy
+        preds = [v for item in preds for k,vs in item.items() for v in vs]
+        preds = [int(torch.argmax(pred)) for pred in preds]
+        preds = [label_map["lab_grade"][p] for p in preds]
+        #values, preds = torch.max(torch.tensor(preds), dim=1)
+        target = [int(tt) for t in target for tt in t]
+        target = [label_map["lab_grade"][p] for p in target]
+        overflow2sample_mapping = [ii for i in overflow2sample_mapping for ii in i]
 
-    # accuracy
-    preds = [v for item in preds for k,vs in item.items() for v in vs]
-    preds = [int(torch.argmax(pred)) for pred in preds]
-    preds = [label_map["lab_grade"][p] for p in preds]
-    #values, preds = torch.max(torch.tensor(preds), dim=1)
-    target = [int(tt) for t in target for tt in t]
-    target = [label_map["lab_grade"][p] for p in target]
+    # mapping [1,1,2,3,3,3] preds [3,4,3,5,5,4] -> preds [4,3,5]
+    assert len(preds)==len(target) and len(preds)==len(overflow2sample_mapping)
+    dict_pred = {}; dict_target = {}
+    for p,t,i in zip(preds, target, overflow2sample_mapping):
+        if i not in dict_pred:
+            dict_pred[i] = [p]; dict_target[i] = [t]
+        else:
+            dict_pred[i].append(p); dict_target[i].append(t)
+    for i in sorted(set([overflow2sample_mapping])): # maybe sort is not required, but let's put it here
+        new_preds.append(round(numpy.mean(dict_pred[i])))
+        new_target.append(round(numpy.mean(dict_target[i])))
+    return numpy.array(new_preds), numpy.array(new_target)
+
+def evaluate(dataloader, model, label_map, model_type, plot_conf_mat=False):
+    if model_type == "seg_essay":
+        preds, target = _evaluate_seg_essay(dataloader, model, label_map)
+    else:
+        with torch.no_grad():
+            preds = []
+            target = []
+            for batch in dataloader:
+                needed_for_prediction = ['input_ids', 'attention_mask', 'token_type_ids', "overflow_to_sample_mapping"] # some of the values cannot be put to gpu, filter those out
+                if model_type in ["trunc_essay"]:
+                    output = model({k: v for k, v in batch.items() if k in needed_for_prediction})
+                elif model_type in ["sentences", "whole_essay"]:
+                    output = model({k: [vv.cuda() for vv in v] for k, v in batch.items() if k in needed_for_prediction})
+                preds.append(output) #["lab_grade"])
+                target.append(batch["lab_grade"])
+
+        # accuracy
+        preds = [v for item in preds for k,vs in item.items() for v in vs]
+        preds = [int(torch.argmax(pred)) for pred in preds]
+        preds = [label_map["lab_grade"][p] for p in preds]
+        #values, preds = torch.max(torch.tensor(preds), dim=1)
+        target = [int(tt) for t in target for tt in t]
+        target = [label_map["lab_grade"][p] for p in target]
+
     #print("Predictions:", preds)
     #print("Gold standard:", target)
     assert len(preds)==len(target)

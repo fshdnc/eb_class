@@ -139,6 +139,7 @@ class JsonDataModule(pl.LightningDataModule):
             new_d["input_ids"] = torch.LongTensor(tokenized["input_ids"][i])
             new_d["token_type_ids"] = torch.LongTensor(tokenized["token_type_ids"][i])
             new_d["attention_mask"] = torch.LongTensor(tokenized["attention_mask"][i])
+            new_d["overflow_to_sample_mapping"] = tokenized["overflow_to_sample_mapping"][i]
             new_data.append(new_d)
         return new_data
             
@@ -228,7 +229,8 @@ class JsonDataModule(pl.LightningDataModule):
             for d in self.all_data:
                 d["essay"] = " ".join(d["essay"])
             self.train = self.tokenize_seg_essay(self.train, tokenizer)
-            self.tokenize_trunc_essay(self.dev, tokenizer)
+            self.dev = self.tokenize_seg_essay(self.dev, tokenizer)
+            #self.tokenize_trunc_essay(self.dev, tokenizer)
 
     def data_sizes(self):
         return len(self.train), len(self.dev), len(self.test)
