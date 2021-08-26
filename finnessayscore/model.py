@@ -8,7 +8,7 @@ from finnessayscore.loss import LabelSmoothingLoss
 
 class AbstractModel(pl.LightningModule):
 
-    def __init__(self):
+    def __init__(self, class_nums, class_weights=None, **config):
         """
         Abstract base class for other training modules, defines:
             training_step
@@ -18,6 +18,15 @@ class AbstractModel(pl.LightningModule):
         class_weights: Dict[name]=torch.Tesnor([weights])
         """
         super().__init__()
+        self.train_acc = torch.nn.ModuleDict({name: torchmetrics.Accuracy() for name in class_nums})
+        self.val_acc = torch.nn.ModuleDict({name: torchmetrics.Accuracy() for name in class_nums})
+        self.train_qwk = torch.nn.ModuleDict({name: torchmetrics.CohenKappa(num_classes=len(lst), weights='quadratic') for name, lst in class_nums.items()})
+        self.val_qwk = torch.nn.ModuleDict({name: torchmetrics.CohenKappa(num_classes=len(lst), weights='quadratic') for name, lst in class_nums.items()})
+        if class_weights is None:
+            self.class_weights = {name: None for name in class_nums}
+        else:
+            self.class_weights = class_weights
+        self.config = config
 
     def training_step(self,batch,batch_idx):
         out = self(batch)
@@ -85,18 +94,9 @@ class ClassModel(AbstractModel):
         an essay is represented by average bert encodings of each sentence
         class_weights: Dict[name]=torch.Tesnor([weights])
         """
-        super().__init__()
+        super().__init__(class_nums, class_weights, **config)
         self.bert = transformers.BertModel.from_pretrained(bert_model)
         self.cls_layers = torch.nn.ModuleDict({name: torch.nn.Linear(self.bert.config.hidden_size, len(lst)) for name, lst in class_nums.items()})
-        self.train_acc = torch.nn.ModuleDict({name: torchmetrics.Accuracy() for name in class_nums})
-        self.val_acc = torch.nn.ModuleDict({name: torchmetrics.Accuracy() for name in class_nums})
-        self.train_qwk = torch.nn.ModuleDict({name: torchmetrics.CohenKappa(num_classes=len(lst), weights='quadratic') for name, lst in class_nums.items()})
-        self.val_qwk = torch.nn.ModuleDict({name: torchmetrics.CohenKappa(num_classes=len(lst), weights='quadratic') for name, lst in class_nums.items()})
-        if class_weights==None:
-            self.class_weights = {name: None for name in class_nums}
-        else:
-            self.class_weights = class_weights
-        self.config = config
         if self.config["label_smoothing"]:
             self.losses = {name: LabelSmoothingLoss(len(lst), smoothing=self.config["smoothing"], weight=self.class_weights[name]) for name, lst in class_nums.items()}
 
@@ -124,18 +124,9 @@ class WholeEssayClassModel(AbstractModel):
         An essay is represented by average bert encodings of its chunks
         class_weights: Dict[name]=torch.Tesnor([weights])
         """
-        super().__init__()
+        super().__init__(class_nums, class_weights, **config)
         self.bert = transformers.BertModel.from_pretrained(bert_model)
         self.cls_layers = torch.nn.ModuleDict({name: torch.nn.Linear(self.bert.config.hidden_size, len(lst)) for name, lst in class_nums.items()})
-        self.train_acc = torch.nn.ModuleDict({name: torchmetrics.Accuracy() for name in class_nums})
-        self.val_acc = torch.nn.ModuleDict({name: torchmetrics.Accuracy() for name in class_nums})
-        self.train_qwk = torch.nn.ModuleDict({name: torchmetrics.CohenKappa(num_classes=len(lst), weights='quadratic') for name, lst in class_nums.items()})
-        self.val_qwk = torch.nn.ModuleDict({name: torchmetrics.CohenKappa(num_classes=len(lst), weights='quadratic') for name, lst in class_nums.items()})
-        if class_weights==None:
-            self.class_weights = {name: None for name in class_nums}
-        else:
-            self.class_weights = class_weights
-        self.config = config
         if self.config["label_smoothing"]:
             self.losses = {name: LabelSmoothingLoss(len(lst), smoothing=self.config["smoothing"], weight=self.class_weights[name]) for name, lst in class_nums.items()}
 
@@ -155,18 +146,9 @@ class TruncEssayClassModel(AbstractModel):
         An essay is represented by the first 512 tokens
         class_weights: Dict[name]=torch.Tesnor([weights])
         """
-        super().__init__()
+        super().__init__(class_nums, class_weights, **config)
         self.bert = transformers.BertModel.from_pretrained(bert_model)
         self.cls_layers = torch.nn.ModuleDict({name: torch.nn.Linear(self.bert.config.hidden_size, len(lst)) for name, lst in class_nums.items()})
-        self.train_acc = torch.nn.ModuleDict({name: torchmetrics.Accuracy() for name in class_nums})
-        self.val_acc = torch.nn.ModuleDict({name: torchmetrics.Accuracy() for name in class_nums})
-        self.train_qwk = torch.nn.ModuleDict({name: torchmetrics.CohenKappa(num_classes=len(lst), weights='quadratic') for name, lst in class_nums.items()})
-        self.val_qwk = torch.nn.ModuleDict({name: torchmetrics.CohenKappa(num_classes=len(lst), weights='quadratic') for name, lst in class_nums.items()})
-        if class_weights==None:
-            self.class_weights = {name: None for name in class_nums}
-        else:
-            self.class_weights = class_weights
-        self.config = config
         if self.config["label_smoothing"]:
             self.losses = {name: LabelSmoothingLoss(len(lst), smoothing=self.config["smoothing"], weight=self.class_weights[name]) for name, lst in class_nums.items()}
 
@@ -182,19 +164,10 @@ class TruncEssayClassModel(AbstractModel):
 class ProjectionClassModel(AbstractModel):
 
     def __init__(self, class_nums, bert_model="TurkuNLP/bert-base-finnish-cased-v1", class_weights=None, **config):
-        super().__init__()
+        super().__init__(class_nums, class_weights, **config)
         self.bert = transformers.BertModel.from_pretrained(bert_model)
         self.proj_layers=torch.nn.ModuleDict({name: torch.nn.Linear(self.bert.config.hidden_size, self.bert.config.hidden_size) for name, lst in class_nums.items()})
         self.cls_layers = torch.nn.ModuleDict({name: torch.nn.Linear(self.bert.config.hidden_size, len(lst)) for name, lst in class_nums.items()})
-        self.train_acc = torch.nn.ModuleDict({name: torchmetrics.Accuracy() for name in class_nums})
-        self.val_acc = torch.nn.ModuleDict({name: torchmetrics.Accuracy() for name in class_nums})
-        self.train_qwk = torch.nn.ModuleDict({name: torchmetrics.CohenKappa(num_classes=len(lst), weights='quadratic') for name, lst in class_nums.items()})
-        self.val_qwk = torch.nn.ModuleDict({name: torchmetrics.CohenKappa(num_classes=len(lst), weights='quadratic') for name, lst in class_nums.items()})
-        if class_weights==None:
-            self.class_weights = {name: None for name in class_nums}
-        else:
-            self.class_weights = class_weights
-        self.config = config
         if self.config["label_smoothing"]:
             self.losses = {name: LabelSmoothingLoss(len(lst), smoothing=self.config["smoothing"], weight=self.class_weights[name]) for name, lst in class_nums.items()}
 

@@ -17,17 +17,10 @@ class TFIDFModel(AbstractModel):
         """
         class_weights: Dict[name]=torch.Tesnor([weights])
         """
-        super().__init__()
+        super().__init__(class_nums, class_weights, **config)
         self.vectorizer = TfidfVectorizer(ngram_range=(2,5), analyzer="char_wb") #,stop_words=stop_words)
         self.vectorizer.fit(data)
         self.cls_layers = torch.nn.ModuleDict({name: torch.nn.Linear(len(self.vectorizer.idf_), len(lst)) for name, lst in class_nums.items()})
-        self.train_acc = torch.nn.ModuleDict({name: pl.metrics.Accuracy() for name in class_nums})
-        self.val_acc = torch.nn.ModuleDict({name: pl.metrics.Accuracy() for name in class_nums})
-        if class_weights==None:
-            self.class_weights = {name: None for name in class_nums}
-        else:
-            self.class_weights = class_weights
-        self.config = config
 
     def forward(self, batch):
         enc = self.vectorizer.transform(batch["essay"])
