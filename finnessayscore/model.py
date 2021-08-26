@@ -48,11 +48,14 @@ class AbstractModel(pl.LightningModule):
 
     def validation_step(self,batch,batch_idx):
         out = self(batch)
+        #losses = []
         for name in self.cls_layers:
             if self.config["label_smoothing"]:
                 loss = self.losses[name](out[name], batch[name])
             else:
                 loss = F.cross_entropy(out[name], batch[name], weight=self.class_weights[name])
+            #losses.append(loss)
+            self.log(f'train_loss_{name}', loss)
             self.val_acc[name](out[name], batch[name])
             self.val_qwk[name](out[name], batch[name])
 

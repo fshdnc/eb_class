@@ -83,13 +83,11 @@ if __name__=="__main__":
                          callbacks=[checkpoint_callback],
                          fast_dev_run=False)
     trainer.fit(model, datamodule=data)
+    checkpoint_callback.best_model_path
 
     model.eval()
     model.cuda()
 
-    #evaluate(dataloader, dataset, model, model_output_to_p, save_directory='plots')
-    #evaluate(dataloader, dataset, model, model_output_to_p, save_directory=None):
-    # TODO: instead of tensor
     from finnessayscore.evaluate import evaluate
     print("Training set")
     evaluate(data.train_dataloader(), model, data.get_label_map(), model_type=args.model_type)
