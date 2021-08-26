@@ -46,7 +46,7 @@ class AbstractModel(pl.LightningModule):
             self.log(f"train_qwk_{name}", self.train_qwk[name].compute()*100)
             self.train_qwk[name].reset()
 
-    def validation_step(self,batch,batch_idx):
+    def validation_step(self, batch, batch_idx):
         out = self(batch)
         #losses = []
         for name in self.cls_layers:
@@ -127,7 +127,6 @@ class WholeEssayClassModel(AbstractModel):
         super().__init__()
         self.bert = transformers.BertModel.from_pretrained(bert_model)
         self.cls_layers = torch.nn.ModuleDict({name: torch.nn.Linear(self.bert.config.hidden_size, len(lst)) for name, lst in class_nums.items()})
-        #self.softmax = torch.nn.Softmax(dim=1)
         self.train_acc = torch.nn.ModuleDict({name: torchmetrics.Accuracy() for name in class_nums})
         self.val_acc = torch.nn.ModuleDict({name: torchmetrics.Accuracy() for name in class_nums})
         self.train_qwk = torch.nn.ModuleDict({name: torchmetrics.CohenKappa(num_classes=len(lst), weights='quadratic') for name, lst in class_nums.items()})
@@ -142,23 +141,10 @@ class WholeEssayClassModel(AbstractModel):
 
     def forward(self, batch):
         # one essay per batch, i.e. batch_size 1
-        #print("batch")
-        #for k,v in batch.items():
-        #    print(k,v)
-        #    try:
-        #        print(len(v), v[0].size())
-        #    except:
-        #        print("no size")
         essay_enc = self.bert(input_ids=batch['input_ids'][0],
                               attention_mask=batch['attention_mask'][0],
                               token_type_ids=batch['token_type_ids'][0])
-        #print(); print("essay_enc", essay_enc)
         essay_enc = torch.unsqueeze(torch.sum(essay_enc.pooler_output, 0), 0)
-        #print(); print("essay_enc", essay_enc)
-        #for name, layer in self.cls_layers.items():
-        #    print("cls layer(essay_enc)", layer(essay_enc))
-        #    print("softmax cls essay_enc", self.softmax(layer(essay_enc)))
-        #return {name: self.softmax(layer(essay_enc)) for name, layer in self.cls_layers.items()}
         return {name: layer(essay_enc) for name, layer in self.cls_layers.items()}
 
 
@@ -172,7 +158,6 @@ class TruncEssayClassModel(AbstractModel):
         super().__init__()
         self.bert = transformers.BertModel.from_pretrained(bert_model)
         self.cls_layers = torch.nn.ModuleDict({name: torch.nn.Linear(self.bert.config.hidden_size, len(lst)) for name, lst in class_nums.items()})
-        #self.softmax = torch.nn.Softmax(dim=1)
         self.train_acc = torch.nn.ModuleDict({name: torchmetrics.Accuracy() for name in class_nums})
         self.val_acc = torch.nn.ModuleDict({name: torchmetrics.Accuracy() for name in class_nums})
         self.train_qwk = torch.nn.ModuleDict({name: torchmetrics.CohenKappa(num_classes=len(lst), weights='quadratic') for name, lst in class_nums.items()})
@@ -191,7 +176,6 @@ class TruncEssayClassModel(AbstractModel):
         enc = self.bert(input_ids=batch['input_ids'],
                         attention_mask=batch['attention_mask'],
                         token_type_ids=batch['token_type_ids']) #BxS_LENxSIZE; BxSIZE
-        #return {name: self.softmax(layer(enc.pooler_output)) for name, layer in self.cls_layers.items()}
         return {name: layer(enc.pooler_output) for name, layer in self.cls_layers.items()}
 
 
@@ -200,12 +184,8 @@ class ProjectionClassModel(AbstractModel):
     def __init__(self, class_nums, bert_model="TurkuNLP/bert-base-finnish-cased-v1", class_weights=None, **config):
         super().__init__()
         self.bert = transformers.BertModel.from_pretrained(bert_model)
-        #for param in self.bert.parameters():
-        #    param.requires_grad = False
-
         self.proj_layers=torch.nn.ModuleDict({name: torch.nn.Linear(self.bert.config.hidden_size, self.bert.config.hidden_size) for name, lst in class_nums.items()})
         self.cls_layers = torch.nn.ModuleDict({name: torch.nn.Linear(self.bert.config.hidden_size, len(lst)) for name, lst in class_nums.items()})
-        self.softmax = torch.nn.Softmax(dim=1)
         self.train_acc = torch.nn.ModuleDict({name: torchmetrics.Accuracy() for name in class_nums})
         self.val_acc = torch.nn.ModuleDict({name: torchmetrics.Accuracy() for name in class_nums})
         self.train_qwk = torch.nn.ModuleDict({name: torchmetrics.CohenKappa(num_classes=len(lst), weights='quadratic') for name, lst in class_nums.items()})
@@ -227,5 +207,5 @@ class ProjectionClassModel(AbstractModel):
         result={}
         for name, layer in self.cls_layers.items():
             projected=torch.tanh(self.proj_layers[name](avg_end))
-            result[name]=self.softmax(layer(projected))
+            result[name]=layer(projected)
         return result
