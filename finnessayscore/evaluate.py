@@ -66,10 +66,8 @@ def _evaluate_seg_essay(dataloader, model, label_map):
         # accuracy
         preds = [v for item in preds for k,vs in item.items() for v in vs]
         preds = [int(torch.argmax(pred)) for pred in preds]
-        preds = [label_map["lab_grade"][p] for p in preds]
         #values, preds = torch.max(torch.tensor(preds), dim=1)
         target = [int(tt) for t in target for tt in t]
-        target = [label_map["lab_grade"][p] for p in target]
         overflow2sample_mapping = [ii for i in overflow2sample_mapping for ii in i]
 
     # mapping [1,1,2,3,3,3] preds [3,4,3,5,5,4] -> preds [4,3,5]
@@ -80,10 +78,13 @@ def _evaluate_seg_essay(dataloader, model, label_map):
             dict_pred[i] = [p]; dict_target[i] = [t]
         else:
             dict_pred[i].append(p); dict_target[i].append(t)
-    for i in sorted(set([overflow2sample_mapping])): # maybe sort is not required, but let's put it here
+    new_preds = []; new_target = []
+    for i in sorted(set(overflow2sample_mapping)): # maybe sort is not required, but let's put it here
         new_preds.append(round(numpy.mean(dict_pred[i])))
         new_target.append(round(numpy.mean(dict_target[i])))
-    return numpy.array(new_preds), numpy.array(new_target)
+    new_preds = [label_map["lab_grade"][p] for p in new_preds]
+    new_target = [label_map["lab_grade"][p] for p in new_target]
+    return new_preds, new_target
 
 def evaluate(dataloader, model, label_map, model_type, plot_conf_mat=False):
     if model_type == "seg_essay":

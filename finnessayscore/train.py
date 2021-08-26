@@ -27,6 +27,7 @@ if __name__=="__main__":
     parser.add_argument('--whole_essay_overlap', type=int, default=10)
     parser.add_argument('--model_type', default="sentences", help="trunc_essay, whole_essay, seg_essay, or sentences")
     parser.add_argument('--max_length', type=int, default=512, help="max number of token used in the whole essay model")
+    parser.add_argument('--run_id', help="Optional run id")
 
     args = parser.parse_args()
     assert args.model_type in ["whole_essay", "sentences", "trunc_essay", "seg_essay"]
@@ -36,7 +37,10 @@ if __name__=="__main__":
     if args.use_label_smoothing:
         assert args.smoothing <1 and args.smoothing>=0
     print(args)
-    run_id = str(datetime.datetime.now()).replace(":","").replace(" ","_")
+    if not args.run_id:
+        args.run_id = str(datetime.datetime.now()).replace(":","").replace(" ","_")
+    print("RUN_ID", args.run_id, sep="\t")
+
 
     data = data_reader.JsonDataModule(args.jsons,
                                       batch_size=args.batch_size,
@@ -64,7 +68,7 @@ if __name__=="__main__":
               class_weights={k: v.cuda() for k, v in class_weights.items()})
     #os.system("rm -rf lightning_logs")
     logger = pl.loggers.TensorBoardLogger("lightning_logs",
-                                          name=run_id,
+                                          name=args.run_id,
                                           version="latest")
     checkpoint_callback = ModelCheckpoint(monitor='val_acc_lab_grade',
                                           filename="baseline-{epoch:02d}-{val_acc_lab_grade:.2f}",
