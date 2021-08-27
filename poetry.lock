@@ -59,6 +59,25 @@ optional = false
 python-versions = "~=3.5"
 
 [[package]]
+name = "captum"
+version = "0.4.0"
+description = "Model interpretability for PyTorch"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[package.dependencies]
+matplotlib = "*"
+numpy = "*"
+torch = ">=1.2"
+
+[package.extras]
+dev = ["flask", "ipython", "ipywidgets", "jupyter", "flask-compress", "pytest", "pytest-cov", "black", "flake8", "sphinx", "sphinx-autodoc-typehints", "mypy (>=0.760)", "isort", "scikit-learn"]
+insights = ["flask", "ipython", "ipywidgets", "jupyter", "flask-compress"]
+test = ["pytest", "pytest-cov"]
+tutorials = ["flask", "ipython", "ipywidgets", "jupyter", "flask-compress", "torchtext", "torchvision"]
+
+[[package]]
 name = "certifi"
 version = "2021.5.30"
 description = "Python package for providing Mozilla's CA Bundle."
@@ -721,7 +740,7 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "40f4d1159a956310c3a36b51145d81b6a2399d210f068b71705bcce6a981f40b"
+content-hash = "5b2f246b440f9a1fe5d82de4f34c27cac88a48f4db0b7ed3bd6552266cf113e9"
 
 [metadata.files]
 absl-py = [
@@ -778,6 +797,10 @@ attrs = [
 cachetools = [
     {file = "cachetools-4.2.2-py3-none-any.whl", hash = "sha256:2cc0b89715337ab6dbba85b5b50effe2b0c74e035d83ee8ed637cf52f12ae001"},
     {file = "cachetools-4.2.2.tar.gz", hash = "sha256:61b5ed1e22a0924aed1d23b478f37e8d52549ff8a961de2909c69bf950020cff"},
+]
+captum = [
+    {file = "captum-0.4.0-py3-none-any.whl", hash = "sha256:2b849a2484b18e8533af5fb555aa1998374a7a03e91654603fb4e4c9be5caf89"},
+    {file = "captum-0.4.0.tar.gz", hash = "sha256:189d99c2934d41e3834d79afe6403de9a129b415a636038d874f5bf0e66d96d7"},
 ]
 certifi = [
     {file = "certifi-2021.5.30-py2.py3-none-any.whl", hash = "sha256:50b1e4f8446b06f41be7dd6338db18e0990601dce795c2b1686458aa7e8fa7d8"},
