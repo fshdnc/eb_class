@@ -211,7 +211,7 @@ class JsonDataModule(pl.LightningDataModule):
             tokenizer = transformers.AutoTokenizer.from_pretrained(self.bert_model_name) #, truncation=True)
             self.tokenize(self.all_data, tokenizer)
             #self.tokenize_sbert(self.all_data, tokenizer)
-        elif self.model_type=="trunc_essay": #except KeyError:
+        elif "trunc_essay" in self.model_type: #except KeyError:
             tokenizer = transformers.BertTokenizer.from_pretrained(self.bert_model_name,truncation=True)
             # essays and prompts are in list, turn into string
             for d in self.all_data:

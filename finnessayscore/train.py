@@ -30,7 +30,7 @@ if __name__=="__main__":
     parser.add_argument('--run_id', help="Optional run id")
 
     args = parser.parse_args()
-    assert args.model_type in ["whole_essay", "sentences", "trunc_essay", "seg_essay"]
+    assert args.model_type in ["whole_essay", "sentences", "trunc_essay", "trunc_essay_ord", "pedantic_trunc_essay_ord", "seg_essay"]
     if args.model_type=="sentences":
         for j in args.jsons:
             assert "parsed" in j
@@ -57,6 +57,10 @@ if __name__=="__main__":
         m = model.WholeEssayClassModel
     elif args.model_type=="sentences":
         m = model.ClassModel
+    elif args.model_type == "trunc_essay_ord":
+        m = model.TruncEssayOrdModel
+    elif args.model_type == "pedantic_trunc_essay_ord":
+        m = model.PedanticTruncEssayOrdModel
     elif args.model_type in ["trunc_essay", "seg_essay"]:
         m = model.TruncEssayClassModel
     #model = model.ProjectionClassModel(data.class_nums(),
