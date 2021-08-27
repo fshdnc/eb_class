@@ -98,7 +98,7 @@ def evaluate(dataloader, model, label_map, model_type, plot_conf_mat=False):
                 if model_type in ["trunc_essay"]:
                     output = model({k: v for k, v in batch.items() if k in needed_for_prediction})
                 elif model_type in ["sentences", "whole_essay"]:
-                    output = model({k: [vv.cuda() for vv in v] for k, v in batch.items() if k in needed_for_prediction})
+                    output = model({k: [vv for vv in v] for k, v in batch.items() if k in needed_for_prediction})
                 preds.append(output) #["lab_grade"])
                 target.append(batch["lab_grade"])
 

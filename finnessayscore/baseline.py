@@ -24,7 +24,7 @@ class TFIDFModel(AbstractModel):
 
     def forward(self, batch):
         enc = self.vectorizer.transform(batch["essay"])
-        enc = torch.from_numpy(enc.toarray()).float().cuda()
+        enc = torch.from_numpy(enc.toarray()).float().to(batch["essay"].device)
         return {name: layer(enc) for name, layer in self.cls_layers.items()}
         
 def evaluate(dataloader, model, label_map, plot_conf_mat=False, fname=None):
@@ -78,7 +78,7 @@ if __name__=="__main__":
                                       [d["essay"] for d in data.train],
                                       lr=args.lr,
                                       num_training_steps=train_len//args.batch_size*args.epochs,
-                                      class_weights={k: v.cuda() for k, v in class_weights.items()})
+                                      class_weights={k: v for k, v in class_weights.items()})
     os.system("rm -rf lightnint_logs")
     logger = pl.loggers.TensorBoardLogger("lightning_logs",
                                           name="baseline",
@@ -96,7 +96,6 @@ if __name__=="__main__":
     trainer.fit(model, datamodule=data)
 
     model.eval()
-    model.cuda()
 
     print("Training set")
     evaluate(data.train_dataloader(), model, data.get_label_map())

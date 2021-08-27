@@ -154,7 +154,7 @@ class TruncEssayClassModel(AbstractModel):
 
     def forward(self, batch):
         for k in ["input_ids", "attention_mask", "token_type_ids"]:
-            batch[k] = torch.nn.utils.rnn.pad_sequence(batch[k], batch_first=True).cuda()
+            batch[k] = torch.nn.utils.rnn.pad_sequence(batch[k], batch_first=True)
         enc = self.bert(input_ids=batch['input_ids'],
                         attention_mask=batch['attention_mask'],
                         token_type_ids=batch['token_type_ids']) #BxS_LENxSIZE; BxSIZE
