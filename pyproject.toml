@@ -8,6 +8,7 @@ authors = ["Frankie Robertson <frankie@robertson.name>"]
 python = "^3.8"
 pytorch-lightning = "^1.4.0"
 transformers = "^4.9.1"
+scikit-learn = "^0.24.2"
 
 [tool.poetry.dev-dependencies]
 
