@@ -47,6 +47,7 @@ def plot_confusion_matrix(conf_matrix, label_map, fname=None):
         fname = str(datetime.datetime.now()).replace(":","").replace(" ","_")
     if not fname.endswith(".png"):
         fname = fname + ".png"
+    print("Confusion matrix saved to", fname)
     plt.savefig(fname)
 
 def _evaluate_seg_essay(dataloader, model, label_map):
@@ -98,7 +99,7 @@ def evaluate(dataloader, model, label_map, model_type, plot_conf_mat=False):
                 if "trunc_essay" in model_type:
                     output = model({k: v for k, v in batch.items() if k in needed_for_prediction})
                 elif model_type in ["sentences", "whole_essay"]:
-                    output = model({k: [vv for vv in v] for k, v in batch.items() if k in needed_for_prediction})
+                    output = model({k: [vv.to(model.device) for vv in v] for k, v in batch.items() if k in needed_for_prediction})
                 preds.append({
                     k: [int(i) for i in v]
                     for k, v
