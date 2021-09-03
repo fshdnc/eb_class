@@ -25,7 +25,7 @@ if __name__=="__main__":
     parser.add_argument('--jsons',nargs="+",help="JSON(s) with the data")
     parser.add_argument('--grad_acc', type=int, default=1)
     parser.add_argument('--whole_essay_overlap', type=int, default=10)
-    parser.add_argument('--model_type', default="sentences", help="trunc_essay, whole_essay, seg_essay, or sentences")
+    parser.add_argument('--model_type', default="sentences", help="trunc_essay, whole_essay, seg_essay, sentences, trunc_essay_ord, or pedantic_trunc_essay_ord")
     parser.add_argument('--max_length', type=int, default=512, help="max number of token used in the whole essay model")
     parser.add_argument('--run_id', help="Optional run id")
 
@@ -69,7 +69,7 @@ if __name__=="__main__":
               lr=args.lr,
               label_smoothing=args.use_label_smoothing, smoothing=args.smoothing,
               num_training_steps=train_len//args.batch_size*args.epochs,
-              class_weights={k: v for k, v in class_weights.items()})
+              class_weights={k: v.cuda() for k, v in class_weights.items()})
     #os.system("rm -rf lightning_logs")
     logger = pl.loggers.TensorBoardLogger("lightning_logs",
                                           name=args.run_id,
