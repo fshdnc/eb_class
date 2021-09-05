@@ -138,11 +138,23 @@ class WholeEssayClassModel(AbstractModel):
 
     def forward(self, batch):
         # one essay per batch, i.e. batch_size 1
-        essay_enc = self.bert(input_ids=batch['input_ids'][0],
-                              attention_mask=batch['attention_mask'][0],
-                              token_type_ids=batch['token_type_ids'][0])
-        essay_enc = torch.unsqueeze(torch.sum(essay_enc.pooler_output, 0), 0)
-        return {name: layer(essay_enc) for name, layer in self.cls_layers.items()}
+        essay_enc = self.bert(input_ids=batch['input_ids'],
+                              attention_mask=batch['attention_mask'],
+                              token_type_ids=batch['token_type_ids'])
+        segs_pooled = essay_enc.pooler_output
+        assert len(batch['doc_in_batch']) == len(segs_pooled)
+        pool_len = segs_pooled.shape[1]
+        docs_pooled = torch.zeros(
+            batch['num_docs'],
+            pool_len,
+            dtype=segs_pooled.dtype,
+            device=segs_pooled.device
+        ).scatter_add_(
+            0,
+            batch['doc_in_batch'].unsqueeze(1).broadcast_to(len(batch['doc_in_batch']), pool_len),
+            segs_pooled
+        )
+        return {name: layer(docs_pooled) for name, layer in self.cls_layers.items()}
 
 
 class TruncEssayClassModel(AbstractModel):

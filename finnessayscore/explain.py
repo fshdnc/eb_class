@@ -4,6 +4,7 @@ from captum.attr import visualization as viz
 from captum.attr import IntegratedGradients, LayerConductance, LayerIntegratedGradients
 from captum.attr import configure_interpretable_embedding_layer, remove_interpretable_embedding_layer
 import captum
+from functools import partial
 
 import torch
 import pytorch_lightning as pl
@@ -12,24 +13,77 @@ from finnessayscore import data_reader, model
 import pickle
 import argparse
 
-# LayerIntegratedGradients only takes in inputs (tensor or tuple of tensors)
-class ExplainWholeEssayClassModel(model.WholeEssayClassModel):
-    def __init__(self, class_nums, class_weights=None, **config):
-        super().__init__(class_nums, class_weights=class_weights, **config)
-    def forward(self, batch_input_ids, batch_attention_mask, batch_token_type_ids):
-        print("batch_input_ids", batch_input_ids)
-        print("batch_attention_mask", batch_attention_mask)
-        print("batch_token_type_ids", batch_token_type_ids)
-        essay_enc = self.bert(input_ids=batch_input_ids[0],
-                        attention_mask=batch_attention_mask[0],
-                              token_type_ids=batch_token_type_ids[0]) #BxS_LENxSIZE; BxSIZE
-        essay_enc = torch.unsqueeze(torch.sum(essay_enc.pooler_output, 0), 0)
-        print("essay_enc", essay_enc)
-        return {name: layer(essay_enc) for name, layer in self.cls_layers.items()}
+BERT_MAX_SEQUENCE_LENGTH = 512
 
-def predict(input_ids, attention_mask, token_type_ids): #inputs, token_type_ids=None, position_ids=None, attention_mask=None):
-    pred = trained_model(input_ids, attention_mask, token_type_ids)
-    return pred["lab_grade"] #return the output of the classification layer
+
+def resegment(all_input_ids, all_attention_masks, all_token_type_ids):
+    outputs = {
+        'input_ids': [],
+        'attention_mask': [],
+        'token_type_ids': [],
+        'num_docs': torch.tensor([len(all_input_ids)]),
+        'doc_in_batch': [],
+        'doc': [],
+    }
+    payload_tokens = BERT_MAX_SEQUENCE_LENGTH - 2
+    for example_idx, (input_ids, attention_mask, token_type_ids) in \
+            enumerate(zip(all_input_ids, all_attention_masks, all_token_type_ids)):
+        outputs['doc_in_batch'].append(example_idx)
+        outputs['doc'].append(example_idx)
+        end_seq_idx = (input_ids == 103).nonzero(as_tuple=True)[0]
+        payload_slice = slice(1, end_seq_idx)
+        for (input_id_chunk, attention_mask_chunk, token_type_ids_chunk) in \
+                zip(
+                    input_ids[payload_slice].split(payload_tokens),
+                    attention_mask[payload_slice].split(payload_tokens),
+                    token_type_ids[payload_slice].split(payload_tokens)
+                ):
+            print("b4 padding", input_id_chunk)
+            input_id_chunk = torch.cat(
+                [torch.tensor([102]) + input_id_chunk + torch.tensor([103])]
+            )
+            print("after padding", input_id_chunk)
+            attention_mask_chunk = torch.cat(
+                [torch.tensor([1]) + attention_mask_chunk + torch.tensor([1])]
+            )
+            token_type_ids_chunk = torch.cat(
+                [torch.tensor([0]) + token_type_ids_chunk + torch.tensor([0])]
+            )
+            padding_len = BERT_MAX_SEQUENCE_LENGTH - len(input_id_chunk)
+            if padding_len > 0:
+                padding = torch.full((padding_len,), 0)
+                input_id_chunk = torch.cat([input_id_chunk, padding])
+                attention_mask_chunk = torch.cat([attention_mask_chunk, padding])
+                token_type_ids_chunk = torch.cat([token_type_ids_chunk, padding])
+            outputs["input_ids"].append(input_id_chunk)
+            outputs["attention_mask"].append(attention_mask_chunk)
+            outputs["token_type_ids"].append(token_type_ids_chunk)
+    for k, v in outputs.items():
+        if not isinstance(v, list):
+            continue
+        if k.startswith("doc"):
+            outputs[k] = torch.tensor(v)
+        else:
+            outputs[k] = torch.vstack(v)
+    return outputs
+
+
+def mk_predict(trained_model, do_segment=False):
+    def predict(input_ids, attention_mask, token_type_ids): #inputs, token_type_ids=None, position_ids=None, attention_mask=None):
+        if do_segment:
+            fake_batch = resegment(input_ids, attention_mask, token_type_ids)
+        else:
+            fake_batch = {
+                'input_ids': input_ids,
+                'attention_mask': attention_mask,
+                'token_type_ids': token_type_ids,
+            }
+        # doc, doc_in_batch, num_docs
+        print("fake_batch")
+        print(fake_batch)
+        pred = trained_model(fake_batch)
+        return pred["lab_grade"] #return the output of the classification layer
+    return predict
 
 def summarize_attributions(attributions):
     attributions = attributions.sum(dim=-1).squeeze(0)
@@ -78,31 +132,33 @@ def build_ref(essay_i, batch, tokenizer, device):
     cls_token_id = tokenizer.cls_token_id # A token used for prepending to the concatenated question-text word sequence
 
     # ref input token id
-    ref_input_ids = torch.tensor([[token if token==cls_token_id or token==sep_token_id else ref_token_id for token in seg] for seg in batch["input_ids"][essay_i]])
+    ref_input_ids = torch.tensor([token if token==cls_token_id or token==sep_token_id else ref_token_id for token in batch["input_ids"][essay_i]])
     # ref_token_type_ids
     ref_token_type_ids = batch["token_type_ids"][essay_i]
     # ref_attention_mask
     ref_attention_mask = batch["attention_mask"][essay_i]
     
     print("ref_input",(torch.unsqueeze(ref_input_ids, dim=0),
-            torch.unsqueeze(ref_token_type_ids, dim=0),
-            torch.unsqueeze(ref_attention_mask, dim=0)))
+            torch.unsqueeze(ref_attention_mask, dim=0),
+            torch.unsqueeze(ref_token_type_ids, dim=0)))
 
     return (torch.unsqueeze(ref_input_ids, dim=0).to(device),
             torch.unsqueeze(ref_attention_mask, dim=0).to(device),
             torch.unsqueeze(ref_token_type_ids, dim=0).to(device))
             
 
-def predict_and_explain(trained_model, tokenizer, obj_batch):
+def predict_and_explain(trained_model, tokenizer, obj_batch, do_segment=False):
+    model_predict = mk_predict(trained_model, do_segment=do_segment)
     trained_model.zero_grad() #to be safe perhaps it's not needed
     device=trained_model.device
 
-    lig = LayerIntegratedGradients(predict, trained_model.bert.embeddings)
+    lig = LayerIntegratedGradients(model_predict, trained_model.bert.embeddings)
     print("obj_batch", obj_batch)
     assert len(obj_batch["input_ids"])==1 # the whole_essay model only takes 1 example at a time
-    prediction = predict(torch.nn.utils.rnn.pad_sequence(obj_batch["input_ids"],batch_first=True).to(device),
-                          torch.nn.utils.rnn.pad_sequence(obj_batch["attention_mask"],batch_first=True).to(device),
-                          torch.nn.utils.rnn.pad_sequence(obj_batch["token_type_ids"],batch_first=True).to(device),)
+    inp = (torch.nn.utils.rnn.pad_sequence(obj_batch["input_ids"],batch_first=True).to(device),
+           torch.nn.utils.rnn.pad_sequence(obj_batch["attention_mask"],batch_first=True).to(device),
+           torch.nn.utils.rnn.pad_sequence(obj_batch["token_type_ids"],batch_first=True).to(device),)
+    prediction = model_predict(*inp)
     print("PREDICTIONS", prediction)
     #for i, prediction in enumerate(predictions): # the whole_essay model only takes 1 example at a time, so index is 0
     prediction_cls=int(torch.argmax(prediction))
@@ -112,17 +168,16 @@ def predict_and_explain(trained_model, tokenizer, obj_batch):
     #inp = (obj_batch["input_ids"][i].unsqueeze(0)[0].to(device),
     #       obj_batch["attention_mask"][i].unsqueeze(0)[0].to(device),
     #       obj_batch["token_type_ids"][i].unsqueeze(0)[0].to(device))
-    inp = (torch.nn.utils.rnn.pad_sequence(obj_batch["input_ids"],batch_first=True).to(device),
-           torch.nn.utils.rnn.pad_sequence(obj_batch["attention_mask"],batch_first=True).to(device),
-           torch.nn.utils.rnn.pad_sequence(obj_batch["token_type_ids"],batch_first=True).to(device),)
-    all_tokens = [tokenizer.convert_ids_to_tokens(seg) for seg in inp[0][0]]
-    #print("all_tokens", all_tokens)
+    all_tokens = [tok for doc in inp[0] for tok in tokenizer.convert_ids_to_tokens(doc)]
+    print("all_tokens", all_tokens)
     print("inp", inp)
     print("ref_input",ref_input)
     for target, classname in enumerate(("1","2","3","4","5")):
         attrs, delta = lig.attribute(inputs=inp,
                                      baselines=ref_input,
-                                     return_convergence_delta=True,target=target)
+                                     return_convergence_delta=True,
+                                     target=target,
+                                     internal_batch_size=1)
         #try:
         #    with open("delme", "wb") as f:
         #        pickle.dump([obj_batch["essay"], attrs, delta], f)
@@ -161,24 +216,28 @@ if __name__=="__main__":
     # paremeters
     checkpoint = "best_model.ckpt"
 
+    model_type = args.model_type
+    if model_type == "whole_essay":
+        model_type = "whole_essay_nosegment"
+
     # data
     data = data_reader.JsonDataModule(args.jsons,
                                       batch_size=args.batch_size,
                                       bert_model_name=args.bert_path,
                                       stride=args.whole_essay_overlap,
                                       max_token=args.max_length,
-                                      model_type=args.model_type)
+                                      model_type=model_type)
     data.setup()
 
     # model
     tokenizer = AutoTokenizer.from_pretrained(args.bert_path)
 
-    trained_model = ExplainWholeEssayClassModel.load_from_checkpoint(checkpoint_path=checkpoint,
+    trained_model = model.WholeEssayClassModel.load_from_checkpoint(checkpoint_path=checkpoint,
                                                                      class_nums=data.class_nums(),
                                                                      label_smoothing=args.use_label_smoothing)
     trained_model.eval()
     #trained_model.cuda() # needs around ~13GB of memory
 
     for batch in data.val_dataloader():
-        predict_and_explain(trained_model, tokenizer, batch)
+        predict_and_explain(trained_model, tokenizer, batch, do_segment=model_type == "whole_essay_nosegment")
         break

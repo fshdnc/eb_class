@@ -7,6 +7,8 @@ random.seed(0)
 import pytorch_lightning as pl
 import transformers
 import torch
+from itertools import groupby
+from transformers.file_utils import PaddingStrategy
 
 from finnessayscore import preprocessing
 
@@ -57,7 +59,11 @@ class JsonDataModule(pl.LightningDataModule):
         for d in data:
             for k,v in d.items():
                 if k.startswith("lab_"):
-                    counters[k].update({v:1})
+                    if isinstance(v, list):
+                        for inner_v in v:
+                            counters[k][inner_v] += 1
+                    else:
+                        counters[k].update({v:1})
         for name, cntr in counters.items():
             print("OUTPUT:", name)
             total = sum(cnt for cls, cnt in cntr.items())
@@ -135,7 +141,7 @@ class JsonDataModule(pl.LightningDataModule):
                               return_overflowing_tokens=True, return_offsets_mapping=True)
         new_data = []
         for i, old_i in enumerate(tokenized["overflow_to_sample_mapping"]):
-            new_d = data[old_i]
+            new_d = data[old_i].copy()
             new_d["input_ids"] = torch.LongTensor(tokenized["input_ids"][i])
             new_d["token_type_ids"] = torch.LongTensor(tokenized["token_type_ids"][i])
             new_d["attention_mask"] = torch.LongTensor(tokenized["attention_mask"][i])
@@ -145,13 +151,53 @@ class JsonDataModule(pl.LightningDataModule):
             
     def tokenize_whole_essay(self, data, tokenizer):
         # Tokenize -> chunk -> add special token
-        for d in data:
-            tokenized = tokenizer(d["essay"], padding=True, truncation='longest_first', max_length=self.config["max_token"], return_overflowing_tokens=True, stride=self.config["stride"], return_offsets_mapping=True)
-            #weights = sum([ for tokenized["attention_mask"]])
-            #d["overflow_to_sample_mapping"] = tokenized["overflow_to_sample_mapping"]
-            d["input_ids"] = torch.LongTensor(tokenized["input_ids"])
-            d["token_type_ids"] = torch.LongTensor(tokenized["token_type_ids"])
-            d["attention_mask"] = torch.LongTensor(tokenized["attention_mask"])
+        def new_batch():
+            return {
+                "input_ids": [],
+                "token_type_ids": [],
+                "attention_mask": [],
+                "doc": [],
+                "doc_in_batch": [],
+                "lab_grade": [],
+            }
+        tokenized = tokenizer([d["essay"] for d in data],
+                              padding=PaddingStrategy.MAX_LENGTH,
+                              truncation="longest_first",
+                              max_length=self.config["max_token"],
+                              stride=self.config["stride"],
+                              return_overflowing_tokens=True,
+                              return_offsets_mapping=True)
+        doc_to_segs = {}
+        for k, v in enumerate(tokenized["overflow_to_sample_mapping"]):
+            doc_to_segs.setdefault(v, []).append(k)
+        data_batched = [new_batch()]
+        doc_in_batch = 0
+        for doc_idx, seg_idxs in doc_to_segs.items():
+            if len(data_batched[-1]["input_ids"]) + len(seg_idxs) > self.batch_size:
+                if len(seg_idxs) > self.batch_size:
+                    raise RuntimeError(f"Batch size {self.batch_size} not big enough to fit document of size {len(seg_idxs)}: {data[doc_idx]!r}")
+                data_batched.append(new_batch())
+                doc_in_batch = 0
+            for seg_idx in seg_idxs:
+                for seg_key in ("input_ids", "token_type_ids", "attention_mask"):
+                    data_batched[-1][seg_key].append(tokenized[seg_key][seg_idx])
+                data_batched[-1]["doc"].append(doc_idx)
+                data_batched[-1]["doc_in_batch"].append(doc_in_batch)
+            for doc_key in ["lab_grade"]:
+                data_batched[-1][doc_key].append(data[doc_idx][doc_key])
+            doc_in_batch += 1
+        for batch in data_batched:
+            batch["num_docs"] = [len(batch["lab_grade"])]
+        return data_batched
+
+    def tokenize_whole_essay_nosegment(self, data, tokenizer):
+        tokenized = tokenizer([d["essay"] for d in data],
+                              padding=False,
+                              truncation=False)
+        for d,input_ids,token_type_ids,attention_mask in zip(data,tokenized["input_ids"], tokenized["token_type_ids"], tokenized["attention_mask"]):
+            d["input_ids"]=torch.LongTensor(input_ids)
+            d["token_type_ids"]=torch.LongTensor(token_type_ids)
+            d["attention_mask"]=torch.LongTensor(attention_mask)
 
     def tokenize(self, data, tokenizer):
         # Tokenize and gather input ids, token type ids and attention masks which we need for the model
@@ -202,6 +248,10 @@ class JsonDataModule(pl.LightningDataModule):
         self.all_data = self.train + self.dev + self.test
         print("After segmenting essays")
         self.basic_stats(self.all_data)
+
+        def untokenize_essay():
+            for d in self.all_data:
+                d["essay"] = " ".join(d["essay"])
         
         # tokenization
         if self.model_type=="sentences": #try:
@@ -214,20 +264,19 @@ class JsonDataModule(pl.LightningDataModule):
         elif "trunc_essay" in self.model_type: #except KeyError:
             tokenizer = transformers.BertTokenizer.from_pretrained(self.bert_model_name,truncation=True)
             # essays and prompts are in list, turn into string
-            for d in self.all_data:
-                d["essay"] = " ".join(d["essay"])
+            untokenize_essay()
             self.tokenize_trunc_essay(self.all_data, tokenizer)
         elif self.model_type == "whole_essay":
             tokenizer = transformers.BertTokenizerFast.from_pretrained(self.bert_model_name,truncation=True)
-            for d in self.all_data:
-                d["essay"] = " ".join(d["essay"])
-            self.tokenize_whole_essay(self.all_data, tokenizer)
-            # debug
-            #self.all_data = [d for d in self.all_data if len(d['overflow_to_sample_mapping'])==1]
+            untokenize_essay()
+            self.train = self.tokenize_whole_essay(self.train, tokenizer)
+            self.dev = self.tokenize_whole_essay(self.dev, tokenizer)
+        elif self.model_type == "whole_essay_nosegment":
+            tokenizer = transformers.BertTokenizerFast.from_pretrained(self.bert_model_name,truncation=False)
+            untokenize_essay()
+            self.tokenize_whole_essay_nosegment(self.all_data, tokenizer)
         elif self.model_type=="seg_essay":
             tokenizer = transformers.BertTokenizerFast.from_pretrained(self.bert_model_name,truncation=True)
-            for d in self.all_data:
-                d["essay"] = " ".join(d["essay"])
             self.train = self.tokenize_seg_essay(self.train, tokenizer)
             self.dev = self.tokenize_seg_essay(self.dev, tokenizer)
             #self.tokenize_trunc_essay(self.dev, tokenizer)
@@ -237,10 +286,13 @@ class JsonDataModule(pl.LightningDataModule):
     
     def get_dataloader(self,which_set,**kwargs):
         """Just a utility so I don't need to repeat this in all the *_dataloader callbacks"""
-        return torch.utils.data.DataLoader(which_set,
-                                           collate_fn=collate_tensors_fn,
-                                           batch_size=self.batch_size,
-                                           **kwargs)
+        if self.model_type != "whole_essay":
+            # Use manual batching for whole_essay
+            kwargs["batch_size"] = self.batch_size
+            kwargs["collate_fn"] = collate_tensors_fn
+        else:
+            kwargs["collate_fn"] = collate_tensors_whole_essay
+        return torch.utils.data.DataLoader(which_set, **kwargs)
         
     def train_dataloader(self):
         return self.get_dataloader(self.train, shuffle=True)
@@ -250,6 +302,25 @@ class JsonDataModule(pl.LightningDataModule):
 
     def test_dataloader(self):
         return self.get_dataloader(self.test)
+
+
+def collate_tensors_whole_essay(items):
+    assert len(items) == 1
+    item = items[0]
+    for k, v in item.items():
+        if k in [
+            "input_ids",
+            "token_type_ids",
+            "attention_mask",
+            "doc",
+            "lab_grade",
+            "num_docs",
+            "doc_in_batch",
+        ]:
+            item[k] = torch.LongTensor(v)
+
+    return item
+
 
 def collate_tensors_fn(items):
     item=items[0] #this is a dictionary as it comes from the dataset
