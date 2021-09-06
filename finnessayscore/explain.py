@@ -40,14 +40,14 @@ def resegment(all_input_ids, all_attention_masks, all_token_type_ids):
                 ):
             print("b4 padding", input_id_chunk)
             input_id_chunk = torch.cat(
-                [torch.tensor([102]) + input_id_chunk + torch.tensor([103])]
+                (torch.tensor([102]), input_id_chunk, torch.tensor([103])), 0
             )
             print("after padding", input_id_chunk)
             attention_mask_chunk = torch.cat(
-                [torch.tensor([1]) + attention_mask_chunk + torch.tensor([1])]
+                (torch.tensor([1]), attention_mask_chunk, torch.tensor([1])), 0
             )
             token_type_ids_chunk = torch.cat(
-                [torch.tensor([0]) + token_type_ids_chunk + torch.tensor([0])]
+                (torch.tensor([0]), token_type_ids_chunk, torch.tensor([0])), 0
             )
             padding_len = BERT_MAX_SEQUENCE_LENGTH - len(input_id_chunk)
             if padding_len > 0:
@@ -65,6 +65,8 @@ def resegment(all_input_ids, all_attention_masks, all_token_type_ids):
             outputs[k] = torch.tensor(v)
         else:
             outputs[k] = torch.vstack(v)
+    print("OUTPUTS", outputs)
+    exit()
     return outputs
 
 

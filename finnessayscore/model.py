@@ -142,6 +142,8 @@ class WholeEssayClassModel(AbstractModel):
                               attention_mask=batch['attention_mask'],
                               token_type_ids=batch['token_type_ids'])
         segs_pooled = essay_enc.pooler_output
+        print("segs_pooled", segs_pooled)
+        print("doc_in_batch", batch["doc_in_batch"])
         assert len(batch['doc_in_batch']) == len(segs_pooled)
         pool_len = segs_pooled.shape[1]
         docs_pooled = torch.zeros(
