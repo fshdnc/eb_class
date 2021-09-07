@@ -97,7 +97,7 @@ def predict_and_explain(trained_model, tokenizer, obj_batch):
     trained_model.zero_grad() #to be safe perhaps it's not needed
     device=trained_model.device
 
-    lig = LayerIntegratedGradients(predict, trained_model.bert.embeddings, internal_batch_size=1)
+    lig = LayerIntegratedGradients(predict, trained_model.bert.embeddings)
     print("obj_batch", obj_batch)
     assert len(obj_batch["input_ids"])==1 # the whole_essay model only takes 1 example at a time
     prediction = predict(torch.nn.utils.rnn.pad_sequence(obj_batch["input_ids"],batch_first=True).to(device),
@@ -122,7 +122,9 @@ def predict_and_explain(trained_model, tokenizer, obj_batch):
     for target, classname in enumerate(("1","2","3","4","5")):
         attrs, delta = lig.attribute(inputs=inp,
                                      baselines=ref_input,
-                                     return_convergence_delta=True,target=target)
+                                     return_convergence_delta=True,
+                                     target=target,
+                                     internal_batch_size=1)
         #try:
         #    with open("delme", "wb") as f:
         #        pickle.dump([obj_batch["essay"], attrs, delta], f)
