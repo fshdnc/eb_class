@@ -28,8 +28,6 @@ def resegment(all_input_ids, all_attention_masks, all_token_type_ids):
     payload_tokens = BERT_MAX_SEQUENCE_LENGTH - 2
     for example_idx, (input_ids, attention_mask, token_type_ids) in \
             enumerate(zip(all_input_ids, all_attention_masks, all_token_type_ids)):
-        outputs['doc_in_batch'].append(example_idx)
-        outputs['doc'].append(example_idx)
         end_seq_idx = (input_ids == 103).nonzero(as_tuple=True)[0]
         payload_slice = slice(1, end_seq_idx)
         for (input_id_chunk, attention_mask_chunk, token_type_ids_chunk) in \
@@ -38,6 +36,8 @@ def resegment(all_input_ids, all_attention_masks, all_token_type_ids):
                     attention_mask[payload_slice].split(payload_tokens),
                     token_type_ids[payload_slice].split(payload_tokens)
                 ):
+            outputs['doc_in_batch'].append(example_idx)
+            outputs['doc'].append(example_idx)
             print("b4 padding", input_id_chunk)
             input_id_chunk = torch.cat(
                 (torch.tensor([102]), input_id_chunk, torch.tensor([103])), 0
@@ -65,14 +65,12 @@ def resegment(all_input_ids, all_attention_masks, all_token_type_ids):
             outputs[k] = torch.tensor(v)
         else:
             outputs[k] = torch.vstack(v)
-    print("OUTPUTS", outputs)
-    exit()
     return outputs
 
 
 def mk_predict(trained_model, do_segment=False):
     def predict(input_ids, attention_mask, token_type_ids): #inputs, token_type_ids=None, position_ids=None, attention_mask=None):
-        if do_segment:
+        if False: #if do_segment:
             fake_batch = resegment(input_ids, attention_mask, token_type_ids)
         else:
             fake_batch = {
@@ -154,7 +152,7 @@ def predict_and_explain(trained_model, tokenizer, obj_batch, do_segment=False):
     trained_model.zero_grad() #to be safe perhaps it's not needed
     device=trained_model.device
 
-    lig = LayerIntegratedGradients(model_predict, trained_model.bert.embeddings)
+    lig = LayerIntegratedGradients(model_predict, trained_model.bert.embeddings.word_embeddings)
     print("obj_batch", obj_batch)
     assert len(obj_batch["input_ids"])==1 # the whole_essay model only takes 1 example at a time
     inp = (torch.nn.utils.rnn.pad_sequence(obj_batch["input_ids"],batch_first=True).to(device),

@@ -161,34 +161,13 @@ class JsonDataModule(pl.LightningDataModule):
                 "lab_grade": [],
             }
         tokenized = tokenizer([d["essay"] for d in data],
-                              padding=PaddingStrategy.MAX_LENGTH,
-                              truncation="longest_first",
-                              max_length=self.config["max_token"],
-                              stride=self.config["stride"],
-                              return_overflowing_tokens=True,
-                              return_offsets_mapping=True)
-        doc_to_segs = {}
-        for k, v in enumerate(tokenized["overflow_to_sample_mapping"]):
-            doc_to_segs.setdefault(v, []).append(k)
-        data_batched = [new_batch()]
-        doc_in_batch = 0
-        for doc_idx, seg_idxs in doc_to_segs.items():
-            if len(data_batched[-1]["input_ids"]) + len(seg_idxs) > self.batch_size:
-                if len(seg_idxs) > self.batch_size:
-                    raise RuntimeError(f"Batch size {self.batch_size} not big enough to fit document of size {len(seg_idxs)}: {data[doc_idx]!r}")
-                data_batched.append(new_batch())
-                doc_in_batch = 0
-            for seg_idx in seg_idxs:
-                for seg_key in ("input_ids", "token_type_ids", "attention_mask"):
-                    data_batched[-1][seg_key].append(tokenized[seg_key][seg_idx])
-                data_batched[-1]["doc"].append(doc_idx)
-                data_batched[-1]["doc_in_batch"].append(doc_in_batch)
-            for doc_key in ["lab_grade"]:
-                data_batched[-1][doc_key].append(data[doc_idx][doc_key])
-            doc_in_batch += 1
-        for batch in data_batched:
-            batch["num_docs"] = [len(batch["lab_grade"])]
-        return data_batched
+                              padding=False,
+                              truncation=False)
+        print("tokenized", tokenized)
+        for d,input_ids,token_type_ids,attention_mask in zip(data,tokenized["input_ids"], tokenized["token_type_ids"], tokenized["attention_mask"]):
+            d["input_ids"]=torch.LongTensor(input_ids)
+            d["token_type_ids"]=torch.LongTensor(token_type_ids)
+            d["attention_mask"]=torch.LongTensor(attention_mask)
 
     def tokenize_whole_essay_nosegment(self, data, tokenizer):
         tokenized = tokenizer([d["essay"] for d in data],
@@ -207,15 +186,6 @@ class JsonDataModule(pl.LightningDataModule):
             d["token_type_ids"] = torch.LongTensor(tokenized["token_type_ids"])
             d["attention_mask"] = torch.LongTensor(tokenized["attention_mask"])
 
-    #def tokenize_sbert(self, data, tokenizer):
-        # Tokenize and gather input ids, token type ids and attention masks which we need for the model
-        # https://huggingface.co/sentence-transformers/bert-base-nli-mean-tokens
-    #    for d in data:
-    #        tokenized = tokenizer(d["sents"], padding="longest",truncation="longest_first", max_length=512)
-    #        d["input_ids"] = torch.LongTensor(tokenized["input_ids"])
-    #        d["token_type_ids"] = torch.LongTensor(tokenized["token_type_ids"])
-    #        d["attention_mask"] = torch.LongTensor(tokenized["attention_mask"])
-                    
     def setup(self):
         # Read in from the JSONs
         self.all_data=[]
@@ -269,8 +239,7 @@ class JsonDataModule(pl.LightningDataModule):
         elif self.model_type == "whole_essay":
             tokenizer = transformers.BertTokenizerFast.from_pretrained(self.bert_model_name,truncation=True)
             untokenize_essay()
-            self.train = self.tokenize_whole_essay(self.train, tokenizer)
-            self.dev = self.tokenize_whole_essay(self.dev, tokenizer)
+            self.tokenize_whole_essay(self.all_data, tokenizer)
         elif self.model_type == "whole_essay_nosegment":
             tokenizer = transformers.BertTokenizerFast.from_pretrained(self.bert_model_name,truncation=False)
             untokenize_essay()

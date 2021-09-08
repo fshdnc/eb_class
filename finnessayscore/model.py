@@ -122,6 +122,57 @@ class ClassModel(AbstractModel):
                 enc = torch.cat((enc, sample_enc), dim=0)
         return {name: layer(enc) for name, layer in self.cls_layers.items()}
 
+#from finnessayscore.bmodel import SegBertModel
+
+BERT_MAX_SEQUENCE_LENGTH = 512
+BERT_PAYLOAD_TOKENS = BERT_MAX_SEQUENCE_LENGTH - 2
+
+
+def rechunk_tokens(word_embeddings, attention_mask, token_type_ids, padding_embed):
+    print("beginning of rechunk",word_embeddings.shape, attention_mask.shape, token_type_ids.shape)
+    payload_slice = slice(1, -1)
+    word_embeddings_new = []
+    attention_mask_new = []
+    token_type_ids_new = []
+    print("splits")
+    print(
+                word_embeddings[payload_slice].split(BERT_PAYLOAD_TOKENS),
+    )
+    print(
+                attention_mask[payload_slice].split(BERT_PAYLOAD_TOKENS),
+    )
+    print(
+                token_type_ids[payload_slice].split(BERT_PAYLOAD_TOKENS)
+    )
+    for (word_embedding_chunk, attention_mask_chunk, token_type_ids_chunk) in \
+            zip(
+                word_embeddings[payload_slice].split(BERT_PAYLOAD_TOKENS),
+                attention_mask[payload_slice].split(BERT_PAYLOAD_TOKENS),
+                token_type_ids[payload_slice].split(BERT_PAYLOAD_TOKENS)
+            ):
+        
+        word_embedding_chunk = torch.cat(
+            (word_embeddings[0].unsqueeze(0), word_embedding_chunk, word_embeddings[-1].unsqueeze(0)), 0
+        )
+        attention_mask_chunk = torch.cat(
+            (torch.tensor([1]), attention_mask_chunk, torch.tensor([1])), 0
+        )
+        token_type_ids_chunk = torch.cat(
+            (torch.tensor([0]), token_type_ids_chunk, torch.tensor([0])), 0
+        )
+        padding_len = BERT_MAX_SEQUENCE_LENGTH - len(word_embedding_chunk)
+        if padding_len > 0:
+            embed_pad = padding_embed.repeat(padding_len, 1)
+            word_embedding_chunk = torch.cat([word_embedding_chunk, embed_pad])
+            padding = torch.full((padding_len,), 0)
+            attention_mask_chunk = torch.cat([attention_mask_chunk, padding])
+            token_type_ids_chunk = torch.cat([token_type_ids_chunk, padding])
+        word_embeddings_new.append(word_embedding_chunk)
+        attention_mask_new.append(attention_mask_chunk)
+        token_type_ids_new.append(token_type_ids_chunk)
+    print("b4 stacking")
+    print([[y.shape for y in x] for x in [word_embeddings_new, attention_mask_new, token_type_ids_new]])
+    return torch.stack(word_embeddings_new), torch.vstack(attention_mask_new), torch.vstack(token_type_ids_new)
 
 class WholeEssayClassModel(AbstractModel):
 
@@ -137,25 +188,41 @@ class WholeEssayClassModel(AbstractModel):
             self.losses = {name: LabelSmoothingLoss(len(lst), smoothing=self.config["smoothing"], weight=self.class_weights[name]) for name, lst in class_nums.items()}
 
     def forward(self, batch):
-        # one essay per batch, i.e. batch_size 1
-        essay_enc = self.bert(input_ids=batch['input_ids'],
-                              attention_mask=batch['attention_mask'],
-                              token_type_ids=batch['token_type_ids'])
+        assert len(batch['input_ids']) == 1
+        assert (len(batch['input_ids'][0]) == len(batch['token_type_ids'][0]) == len(batch['attention_mask'][0])), "{} != {} != {}".format(len(batch['input_ids'][0]), len(batch['token_type_ids'][0]), len(batch['attention_mask'][0]))
+        end_seq_idx = (batch['input_ids'][0] == 103).nonzero(as_tuple=True)[0]
+        print("end_seq_idx", end_seq_idx)
+        input_ids_final = batch['input_ids'][0][:end_seq_idx].unsqueeze(0)
+        print("input_ids_final.shape", input_ids_final.shape)
+        print("input_ids_final", input_ids_final)
+        input_embeds = self.bert.embeddings.word_embeddings(input_ids_final)
+        #assert len(input_embeds) == 1
+        print("unsqueeze input_embeds.shape", input_embeds.shape)
+        input_embeds = input_embeds.squeeze(0)
+        print("input_embeds.shape", input_embeds.shape)
+        padding_embed = self.bert.embeddings.word_embeddings(torch.tensor([0]))
+        print("padding_embeds",padding_embed)
+        input_embed_stack, attention_mask, token_type_ids = rechunk_tokens(input_embeds, batch['attention_mask'][0][:end_seq_idx], batch['token_type_ids'][0][:end_seq_idx], padding_embed)
+        print("after rechunk", input_embed_stack.shape, attention_mask.shape, token_type_ids.shape)
+        essay_enc = self.bert(inputs_embeds=input_embed_stack,
+                              attention_mask=attention_mask,
+                              token_type_ids=token_type_ids)
         segs_pooled = essay_enc.pooler_output
         print("segs_pooled", segs_pooled)
-        print("doc_in_batch", batch["doc_in_batch"])
-        assert len(batch['doc_in_batch']) == len(segs_pooled)
-        pool_len = segs_pooled.shape[1]
-        docs_pooled = torch.zeros(
-            batch['num_docs'],
-            pool_len,
-            dtype=segs_pooled.dtype,
-            device=segs_pooled.device
-        ).scatter_add_(
-            0,
-            batch['doc_in_batch'].unsqueeze(1).broadcast_to(len(batch['doc_in_batch']), pool_len),
-            segs_pooled
-        )
+        #assert len(batch['doc_in_batch']) == len(segs_pooled)
+        #pool_len = segs_pooled.shape[1]
+        #docs_pooled = torch.zeros(
+            #batch['num_docs'],
+            #pool_len,
+            #dtype=segs_pooled.dtype,
+            #device=segs_pooled.device
+        #).scatter_add_(
+            #batch['doc_in_batch'].unsqueeze(1).broadcast_to(len(batch['doc_in_batch']), pool_len),
+            #torch.tensor([0] * ),
+            #segs_pooled
+        #)
+        docs_pooled = segs_pooled.sum(axis=0).unsqueeze(0)
+        print("docs pooled shape", docs_pooled.shape)
         return {name: layer(docs_pooled) for name, layer in self.cls_layers.items()}
 
 
