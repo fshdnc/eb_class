@@ -12,7 +12,18 @@ import argparse
 
 print("GPU availability:", torch.cuda.is_available())
 
-def predict(dataloader, model, label_map, model_type):
+def get_length_essay_as_batch(attention_mask_batch, overlap=10):
+    """
+    Calculate essay length in terms of number of tokens from the attention mask
+    Input is a "batch" of batch_size 1, i.e. one essay per batch
+    """
+    assert len(attention_mask_batch)==1
+    segs_attention_mask = attention_mask_batch[0]
+    lengths = [sum(seg)-2 for seg in segs_attention_mask]
+    essay_len = sum(lengths) - overlap*(len(lengths)-1)
+    return essay_len
+
+def predict(dataloader, model, label_map, model_type, overlap):
     if model_type == "seg_essay":
         raise NotImplementedError
         #preds, target = _evaluate_seg_essay(dataloader, model, label_map)
@@ -23,8 +34,13 @@ def predict(dataloader, model, label_map, model_type):
             lengths = []
             for batch in dataloader:
                 # getting the lengths of the examples in each batch
-                batch_len = [sum(seg_m)-2 for seg_m in batch["attention_mask"]]
-                lengths.extend(batch_len)
+                if "trunc_essay" in model_type:
+                    batch_len = [sum(seg_m)-2 for seg_m in batch["attention_mask"]]
+                    lengths.extend(batch_len)
+                elif model_type=="whole_essay":
+                    lengths.append(get_length_essay_as_batch(batch["attention_mask"], overlap=overlap))
+                else:
+                    raise NotImplementedError
 
                 needed_for_prediction = ['input_ids', 'attention_mask', 'token_type_ids', "overflow_to_sample_mapping"] # some of the values cannot be put to gpu, filter those out
                 if "trunc_essay" in model_type:
@@ -108,7 +124,7 @@ if __name__=="__main__":
     trained_model.cuda()
 
     import json
-    preds, target, lengths = predict(data.val_dataloader(), trained_model, data.get_label_map(), model_type=args.model_type)
+    preds, target, lengths = predict(data.val_dataloader(), trained_model, data.get_label_map(), model_type=args.model_type, overlap=args.whole_essay_overlap)
     
     with open("delme_lengths.pickle","wb") as f:
         pickle.dump([preds, target, lengths], f)
