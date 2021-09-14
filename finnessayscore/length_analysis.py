@@ -23,10 +23,32 @@ def get_length_essay_as_batch(attention_mask_batch, overlap=10):
     essay_len = sum(lengths) - overlap*(len(lengths)-1)
     return essay_len
 
+def _predict_seg_essay(dataloader, model, label_map):
+    """
+    Return the lengths and preds of each segment
+    For the target, the segments are returned, not the essays
+    """
+    with torch.no_grad():
+        preds = []
+        target = []
+        lengths = []
+        for batch in dataloader:
+            # getting the lengths of the examples in each batch
+            batch_len = [int(sum(seg_m)-2) for seg_m in batch["attention_mask"]]
+            lengths.extend(batch_len)
+
+            needed_for_prediction = ['input_ids', 'attention_mask', 'token_type_ids'] #, "overflow_to_sample_mapping"] # some of the values cannot be put to gpu, filter those out
+            print("batch", batch)
+            output = model({k: [vv.to(model.device) for vv in v] for k, v in batch.items() if k in needed_for_prediction})
+            preds.extend([int(torch.argmax(pred)) for pred in output["lab_grade"]])
+            target.extend([int(t) for t in batch["lab_grade"]])
+    print("lengths, preds, target")
+    print(lengths, preds, target, sep="\n")
+    return lengths, preds, target
+
 def predict(dataloader, model, label_map, model_type, overlap):
     if model_type == "seg_essay":
-        raise NotImplementedError
-        #preds, target = _evaluate_seg_essay(dataloader, model, label_map)
+        lengths, preds, target = _predict_seg_essay(dataloader, model, label_map)
     else:
         with torch.no_grad():
             preds = []
@@ -44,9 +66,6 @@ def predict(dataloader, model, label_map, model_type, overlap):
 
                 needed_for_prediction = ['input_ids', 'attention_mask', 'token_type_ids', "overflow_to_sample_mapping"] # some of the values cannot be put to gpu, filter those out
                 if "trunc_essay" in model_type:
-                    #with open("debug.pickle","wb") as f:
-                    #     pickle.dump({k: v for k, v in batch.items() if k in needed_for_prediction}, f)
-                    #output = model({k: torch.tensor([vv.tolist() for vv in v]).to(model.device) for k, v in batch.items() if k in needed_for_prediction})
                     output = model({k: [vv.to(model.device) for vv in v] for k, v in batch.items() if k in needed_for_prediction})
                 elif model_type in ["sentences", "whole_essay"]:
                     output = model({k: [vv.to(model.device) for vv in v] for k, v in batch.items() if k in needed_for_prediction})
@@ -64,7 +83,7 @@ def predict(dataloader, model, label_map, model_type, overlap):
         target = [int(tt) for t in target for tt in t]
         target = [label_map["lab_grade"][p] for p in target]
         
-        return preds, target, lengths
+    return preds, target, lengths
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser()

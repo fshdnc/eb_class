@@ -135,7 +135,7 @@ class JsonDataModule(pl.LightningDataModule):
                               return_overflowing_tokens=True, return_offsets_mapping=True)
         new_data = []
         for i, old_i in enumerate(tokenized["overflow_to_sample_mapping"]):
-            new_d = data[old_i]
+            new_d = data[old_i].copy()
             new_d["input_ids"] = torch.LongTensor(tokenized["input_ids"][i])
             new_d["token_type_ids"] = torch.LongTensor(tokenized["token_type_ids"][i])
             new_d["attention_mask"] = torch.LongTensor(tokenized["attention_mask"][i])
