@@ -29,6 +29,7 @@ class ExplainWholeEssayClassModel(model.WholeEssayClassModel):
 
 def predict(input_ids, attention_mask, token_type_ids): #inputs, token_type_ids=None, position_ids=None, attention_mask=None):
     pred = trained_model(input_ids, attention_mask, token_type_ids)
+    print("PREDICTION",pred["lab_grade"].shape)
     return pred["lab_grade"] #return the output of the classification layer
 
 def summarize_attributions(attributions):
@@ -39,11 +40,11 @@ def summarize_attributions(attributions):
 def aggregate(inp,attrs,tokenizer):
     """detokenize and merge attributions"""
     detokenized=[]
-    for l in inp[0].cpu().tolist():
+    for l in inp[0][0].cpu().tolist():
         detokenized.append(tokenizer.convert_ids_to_tokens(l))
     attrs=attrs.cpu().tolist()
     
-
+    print("DETOKENIZED",detokenized)
     aggregated=[]
     for token,a_val in zip(detokenized[0],attrs): #One text from the batch at a time!
         if token.startswith("##"):
@@ -103,10 +104,10 @@ def predict_and_explain(trained_model, tokenizer, obj_batch):
     prediction = predict(torch.nn.utils.rnn.pad_sequence(obj_batch["input_ids"],batch_first=True).to(device),
                           torch.nn.utils.rnn.pad_sequence(obj_batch["attention_mask"],batch_first=True).to(device),
                           torch.nn.utils.rnn.pad_sequence(obj_batch["token_type_ids"],batch_first=True).to(device),)
-    print("PREDICTIONS", prediction)
+    print("PREDICTIONS", prediction.shape)
     #for i, prediction in enumerate(predictions): # the whole_essay model only takes 1 example at a time, so index is 0
     prediction_cls=int(torch.argmax(prediction))
-    print("Gold standard:", obj_batch["lab_grade"][0])
+    print("Gold standard:", obj_batch["lab_grade"][0].shape)
     print("Prediction:", ("1","2","3","4","5")[prediction_cls],"Weights:",prediction.tolist())
     ref_input = build_ref(0, obj_batch, tokenizer, device)
     #inp = (obj_batch["input_ids"][i].unsqueeze(0)[0].to(device),
@@ -117,14 +118,15 @@ def predict_and_explain(trained_model, tokenizer, obj_batch):
            torch.nn.utils.rnn.pad_sequence(obj_batch["token_type_ids"],batch_first=True).to(device),)
     all_tokens = [tokenizer.convert_ids_to_tokens(seg) for seg in inp[0][0]]
     #print("all_tokens", all_tokens)
-    print("inp", inp)
-    print("ref_input",ref_input)
-    for target, classname in enumerate(("1","2","3","4","5")):
+    print("inp", inp[0].shape)
+    print("ref_input",ref_input[0].shape)
+    print("I AM HERE")
+    for target, classname in ((4,"5"),):
         attrs, delta = lig.attribute(inputs=inp,
                                      baselines=ref_input,
-                                     return_convergence_delta=True,
+                                     return_convergence_delta=False,
                                      target=target,
-                                     internal_batch_size=1)
+                                     internal_batch_size=1,n_steps=3)
         #try:
         #    with open("delme", "wb") as f:
         #        pickle.dump([obj_batch["essay"], attrs, delta], f)
@@ -133,7 +135,7 @@ def predict_and_explain(trained_model, tokenizer, obj_batch):
         #    print(e)
         attrs_sum = summarize_attributions(attrs)
         aggregated = aggregate(inp, attrs_sum, tokenizer)
-        
+        print("aggregated", aggregated)
         x=captum.attr.visualization.format_word_importances(all_tokens, attrs_sum)
         print("ATTRIBUTION WITH RESPECT TO",classname)
         print_aggregated(target, aggregated)

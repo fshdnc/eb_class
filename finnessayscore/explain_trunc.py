@@ -27,7 +27,15 @@ class ExplainTruncEssayClassModel(model.TruncEssayClassModel):
         enc = self.bert(input_ids=batch_input_ids,
                         attention_mask=batch_attention_mask,
                         token_type_ids=batch_token_type_ids) #BxS_LENxSIZE; BxSIZE
-        return {name: layer(enc.pooler_output) for name, layer in self.cls_layers.items()}
+        if "pooling" in self.config:
+            if self.config["pooling"]=="mean":
+                return {name: layer(torch.mean(enc.last_hidden_state, axis=1)) for name, layer in self.final_layers.items()}
+            elif self.config["pooling"]=="cls":
+                return {name: layer(enc.pooler_output) for name, layer in self.final_layers.items()}
+            else:
+                raise ValueError("Pooling method specified not known.")
+        else: #defaults to cls
+            return {name: layer(enc.pooler_output) for name, layer in self.final_layers.items()}
 
 # helper functions
 def predict(input_ids, attention_mask, token_type_ids): #inputs, token_type_ids=None, position_ids=None, attention_mask=None):
@@ -60,8 +68,8 @@ def aggregate(inp,attrs,tokenizer):
     return aggregated
 
 def print_aggregated(target,aggregated):
-    with open("delme_before_print", "wb") as f:
-        pickle.dump([target,aggregated], f)
+    #with open("delme_before_print", "wb") as f:
+    #    pickle.dump([target,aggregated], f)
     
     to_print=""
     to_print = to_print+"<html><body>"
@@ -91,11 +99,11 @@ def build_ref(essay_i, batch, tokenizer, device):
             torch.unsqueeze(ref_token_type_ids, dim=0).to(device))
             
 
-def predict_and_explain(trained_model, tokenizer, obj_batch):
+def predict_and_explain(trained_model, tokenizer, obj_batch, target_layer_func=lambda x: x.bert.embeddings):
     trained_model.zero_grad() #to be safe perhaps it's not needed
     device=trained_model.device
 
-    lig = LayerIntegratedGradients(predict, trained_model.bert.embeddings)
+    lig = LayerIntegratedGradients(predict, target_layer_func(trained_model)) #trained_model.bert.embeddings)
     predictions = predict(torch.nn.utils.rnn.pad_sequence(obj_batch["input_ids"],batch_first=True).to(device),
                           torch.nn.utils.rnn.pad_sequence(obj_batch["attention_mask"],batch_first=True).to(device),
                           torch.nn.utils.rnn.pad_sequence(obj_batch["token_type_ids"],batch_first=True).to(device),)
@@ -117,12 +125,6 @@ def predict_and_explain(trained_model, tokenizer, obj_batch):
                                          return_convergence_delta=True,
                                          target=target,
                                          internal_batch_size=1)
-            #try:
-            #    with open("delme", "wb") as f:
-            #        pickle.dump([obj_batch["essay"],attrs, delta], f)
-            #    print("saved")
-            #except Exception as e:
-            #    print(e)
             attrs_sum = summarize_attributions(attrs)
             aggregated = aggregate(inp, attrs_sum, tokenizer)
             aggregate_essay.append(aggregated)
@@ -131,7 +133,7 @@ def predict_and_explain(trained_model, tokenizer, obj_batch):
             #print_aggregated(target, aggregated)
             #display(HTML(x))
             #print()
-        aggregate_batch.append((obj_batch["lab_grade"][i].tolist(), aggregate_essay))
+        aggregate_batch.append((obj_batch["lab_grade"][i].tolist(), ("1","2","3","4","5")[prediction_cls], aggregate_essay))
     return aggregate_batch
 
 
@@ -150,6 +152,7 @@ if __name__=="__main__":
     parser.add_argument('--model_type', default="sentences", help="trunc_essay, whole_essay, seg_essay, or sentences")
     parser.add_argument('--max_length', type=int, default=512, help="max number of token used in the whole essay model")
     parser.add_argument('--run_id', help="Optional run id")
+    parser.add_argument('--pooling', default="cls", help="only implemented for trunc_essay model, cls or mean")
 
     args = parser.parse_args()
 
@@ -169,19 +172,39 @@ if __name__=="__main__":
     trained_model = ExplainTruncEssayClassModel.load_from_checkpoint(checkpoint_path=args.load_checkpoint,
                                                                      bert_model=args.bert_path,
                                                                      class_nums=data.class_nums(),
-                                                                     label_smoothing=args.use_label_smoothing)
+                                                                     label_smoothing=args.use_label_smoothing,
+                                                                     pooling=args.pooling)
+
     trained_model.eval()
-    trained_model.cuda() # needs around ~13GB of memory
+    trained_model.cuda()
     aggregates = [] # list of (gold_standard, [attributions for 1-5])
-    count = 0
+    #count = 0
     import json
+
+    # embedding layer
+    agg_layer = []
+    count = 0
+    t = lambda x: x.bert.encoder.layer[l]
     for batch in data.val_dataloader():
-        count += 1
-        if count>83:
+        if count<10:
             agg_batch = predict_and_explain(trained_model, tokenizer, batch)
-            aggregates.extend(agg_batch)
-            if count%1==0: # save attributions every two batches
-                with open("aggregates_gpu.json","wt") as f:
-                    json.dump(aggregates, f)
-                    print("Save predictions for {0} essays".format(len(aggregates)))
+            agg_layer.extend(agg_batch)
+            count += 1
+        aggregates.append(agg_layer)
+
+    for l in range(11):
+        agg_layer = []
+        count = 0
+        t = lambda x: x.bert.encoder.layer[l]
+        for batch in data.val_dataloader():
+            if count<10:
+                agg_batch = predict_and_explain(trained_model, tokenizer, batch, target_layer_func=t)
+                agg_layer.extend(agg_batch)
+            count += 1
+        aggregates.append(agg_layer)
+        #if count%1==0: # save attributions every two batches
+        with open("aggregates_layers_trunc_mean.json","wt") as f:
+            json.dump(aggregates, f)
+            #print("Save predictions for {0} essays".format(len(aggregates)))
+            print("Save predictions for {0} layers".format(len(aggregates)))
 

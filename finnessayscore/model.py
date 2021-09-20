@@ -154,7 +154,8 @@ class TruncEssayClassModel(AbstractModel):
         """
         super().__init__(class_nums, class_weights, **config)
         self.bert = transformers.BertModel.from_pretrained(bert_model)
-        self.cls_layers = torch.nn.ModuleDict({name: torch.nn.Linear(self.bert.config.hidden_size, len(lst)) for name, lst in class_nums.items()})
+        #self.cls_layers = torch.nn.ModuleDict({name: torch.nn.Linear(self.bert.config.hidden_size, len(lst)) for name, lst in class_nums.items()})
+        self.final_layers = torch.nn.ModuleDict({name: torch.nn.Linear(self.bert.config.hidden_size, len(lst)) for name, lst in class_nums.items()})
         if self.config["label_smoothing"]:
             self.losses = {name: LabelSmoothingLoss(len(lst), smoothing=self.config["smoothing"], weight=self.class_weights[name]) for name, lst in class_nums.items()}
 
@@ -164,7 +165,15 @@ class TruncEssayClassModel(AbstractModel):
         enc = self.bert(input_ids=batch['input_ids'],
                         attention_mask=batch['attention_mask'],
                         token_type_ids=batch['token_type_ids']) #BxS_LENxSIZE; BxSIZE
-        return {name: layer(enc.pooler_output) for name, layer in self.cls_layers.items()}
+        if "pooling" in self.config:
+            if self.config["pooling"]=="mean":
+                return {name: layer(torch.mean(enc.last_hidden_state, axis=1)) for name, layer in self.final_layers.items()}
+            elif self.config["pooling"]=="cls":
+                return {name: layer(enc.pooler_output) for name, layer in self.final_layers.items()}
+            else:
+                raise ValueError("Pooling method specified not known.")
+        else: #defaults to cls
+            return {name: layer(enc.pooler_output) for name, layer in self.final_layers.items()}
 
 
 class TruncEssayOrdModel(AbstractModel):
