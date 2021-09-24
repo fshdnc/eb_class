@@ -1,3 +1,4 @@
+import pickle
 import argparse
 import datetime
 import pytorch_lightning as pl
@@ -22,6 +23,7 @@ if __name__=="__main__":
     parser.add_argument('--lr', type=float, default=1e-5)
     parser.add_argument('--use_label_smoothing', default=False, action="store_true", help="Use label smoothing")
     parser.add_argument('--smoothing', type=float, default=0, help="0: one-hot method, 0<x<1: smooth method")
+    parser.add_argument('--class_nums',type=str,help="pickle file with stored class_nums")
     parser.add_argument('--jsons',nargs="+",help="JSON(s) with the data")
     parser.add_argument('--grad_acc', type=int, default=1)
     parser.add_argument('--whole_essay_overlap', type=int, default=10)
@@ -41,14 +43,17 @@ if __name__=="__main__":
     if not args.run_id:
         args.run_id = str(datetime.datetime.now()).replace(":","").replace(" ","_")
     print("RUN_ID", args.run_id, sep="\t")
-
+    if args.class_nums:
+        with open(args.class_nums, "rb") as f:
+            args.class_nums = pickle.load(f)
 
     data = data_reader.JsonDataModule(args.jsons,
                                       batch_size=args.batch_size,
                                       bert_model_name=args.bert_path,
                                       model_type=args.model_type,
                                       stride=args.whole_essay_overlap,
-                                      max_token=args.max_length)
+                                      max_token=args.max_length,
+                                      class_nums_dict=args.class_nums if args.class_nums else {"lab_grade": ["1","2","3","4","5"]})
     data.setup()
     train_len, dev_len, test_len = data.data_sizes()
 

@@ -13,6 +13,7 @@ from transformers import AutoTokenizer
 from finnessayscore import data_reader, model
 import pickle
 import argparse
+import datetime
 
 print("GPU availability:", torch.cuda.is_available())
 
@@ -68,8 +69,6 @@ def aggregate(inp,attrs,tokenizer):
     return aggregated
 
 def print_aggregated(target,aggregated):
-    #with open("delme_before_print", "wb") as f:
-    #    pickle.dump([target,aggregated], f)
     
     to_print=""
     to_print = to_print+"<html><body>"
@@ -99,7 +98,7 @@ def build_ref(essay_i, batch, tokenizer, device):
             torch.unsqueeze(ref_token_type_ids, dim=0).to(device))
             
 
-def predict_and_explain(trained_model, tokenizer, obj_batch, target_layer_func=lambda x: x.bert.embeddings):
+def predict_and_explain(trained_model, tokenizer, obj_batch, target_layer_func=lambda x: x.bert.embeddings, labels=("1","2","3","4","5")):
     trained_model.zero_grad() #to be safe perhaps it's not needed
     device=trained_model.device
 
@@ -113,13 +112,13 @@ def predict_and_explain(trained_model, tokenizer, obj_batch, target_layer_func=l
         aggregate_essay = []
         prediction_cls=int(torch.argmax(prediction))
         print("Gold standard:", obj_batch["lab_grade"][i])
-        print("Prediction:", ("1","2","3","4","5")[prediction_cls],"Weights:",prediction.tolist())
+        print("Prediction:", labels[prediction_cls],"Weights:",prediction.tolist()) # default ("1","2","3","4","5")
         ref_input = build_ref(i, obj_batch, tokenizer, device)
         inp = (obj_batch["input_ids"][i].unsqueeze(0).to(device),
                obj_batch["attention_mask"][i].unsqueeze(0).to(device),
                obj_batch["token_type_ids"][i].unsqueeze(0).to(device))
         all_tokens = tokenizer.convert_ids_to_tokens(inp[0][0])
-        for target, classname in enumerate(("1","2","3","4","5")):
+        for target, classname in enumerate(labels): # default ("1","2","3","4","5")
             attrs, delta = lig.attribute(inputs=inp,
                                          baselines=ref_input,
                                          return_convergence_delta=True,
@@ -133,7 +132,7 @@ def predict_and_explain(trained_model, tokenizer, obj_batch, target_layer_func=l
             #print_aggregated(target, aggregated)
             #display(HTML(x))
             #print()
-        aggregate_batch.append((obj_batch["lab_grade"][i].tolist(), ("1","2","3","4","5")[prediction_cls], aggregate_essay))
+        aggregate_batch.append((obj_batch["lab_grade"][i].tolist(), labels[prediction_cls], aggregate_essay))
     return aggregate_batch
 
 
@@ -146,16 +145,26 @@ if __name__=="__main__":
     parser.add_argument('--lr', type=float, default=1e-5)
     parser.add_argument('--use_label_smoothing', default=False, action="store_true", help="Use label smoothing")
     parser.add_argument('--smoothing', type=float, default=0, help="0: one-hot method, 0<x<1: smooth method")
-    parser.add_argument('--jsons',nargs="+",help="JSON(s) with the data")
     parser.add_argument('--grad_acc', type=int, default=1)
     parser.add_argument('--whole_essay_overlap', type=int, default=10)
     parser.add_argument('--model_type', default="sentences", help="trunc_essay, whole_essay, seg_essay, or sentences")
     parser.add_argument('--max_length', type=int, default=512, help="max number of token used in the whole essay model")
     parser.add_argument('--run_id', help="Optional run id")
     parser.add_argument('--pooling', default="cls", help="only implemented for trunc_essay model, cls or mean")
+    parser.add_argument('--class_nums', help="pickle file with stored class_nums")
+    parser.add_argument('--jsons', nargs="+", help="JSON(s) with the data")
 
     args = parser.parse_args()
+    #args, unknown = parser.parse_known_args()
+    #print(args); print(unknown); exit()
 
+    if not args.run_id:
+        args.run_id = str(datetime.datetime.now()).replace(":","").replace(" ","_")
+    print("RUN_ID", args.run_id, sep="\t")
+    if args.class_nums:
+        with open(args.class_nums, "rb") as f:
+            args.class_nums = pickle.load(f)
+    print(args)
 
     # data
     data = data_reader.JsonDataModule(args.jsons,
@@ -163,7 +172,8 @@ if __name__=="__main__":
                                       bert_model_name=args.bert_path,
                                       stride=args.whole_essay_overlap,
                                       max_token=args.max_length,
-                                      model_type=args.model_type)
+                                      model_type=args.model_type,
+                                      class_nums_dict=args.class_nums if args.class_nums else {"lab_grade": ["1","2","3","4","5"]})
     data.setup()
 
     # model
@@ -186,24 +196,26 @@ if __name__=="__main__":
     count = 0
     t = lambda x: x.bert.encoder.layer[l]
     for batch in data.val_dataloader():
-        if count<10:
-            agg_batch = predict_and_explain(trained_model, tokenizer, batch)
+        if count<30:
+            agg_batch = predict_and_explain(trained_model, tokenizer, batch,
+                                            labels=args.class_nums["lab_grade"] if args.class_nums else ("1","2","3","4","5"))
             agg_layer.extend(agg_batch)
             count += 1
-        aggregates.append(agg_layer)
+    aggregates.append(agg_layer)
 
     for l in range(11):
         agg_layer = []
         count = 0
         t = lambda x: x.bert.encoder.layer[l]
         for batch in data.val_dataloader():
-            if count<10:
-                agg_batch = predict_and_explain(trained_model, tokenizer, batch, target_layer_func=t)
+            if count<30:
+                agg_batch = predict_and_explain(trained_model, tokenizer, batch, target_layer_func=t,
+                                                labels=args.class_nums["lab_grade"] if args.class_nums else ("1","2","3","4","5"))
                 agg_layer.extend(agg_batch)
             count += 1
         aggregates.append(agg_layer)
         #if count%1==0: # save attributions every two batches
-        with open("aggregates_layers_trunc_mean.json","wt") as f:
+        with open(args.run_id+".json","wt") as f:
             json.dump(aggregates, f)
             #print("Save predictions for {0} essays".format(len(aggregates)))
             print("Save predictions for {0} layers".format(len(aggregates)))
