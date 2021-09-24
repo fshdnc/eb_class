@@ -11,6 +11,14 @@ You can install the dependencies using Poetry:
 Or else use the Docker image / `Dockerfile`. The Docker image has been tested
 mainly under Singularity.
 
+## Data format
+
+Input data is a JSON array of objects [{...}, {...}] with one object per essay.
+It should have at least the keys:
+
+ * "essay": an array of strings for each line of the essay e.g. ["Lorem ipsum --", "dolar"]
+ * "lab_grade": the grade as an string e.g. "3"
+
 ## Training/evaluation
 
 Training:
