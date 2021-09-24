@@ -6,6 +6,7 @@ RUN apt-get update -qq -y && \
         wget \
         python3-dev \
         python3-pip \
+        default-libmysqlclient-dev \
         git && \
     rm -rf /var/lib/apt/lists/*
 
@@ -23,8 +24,6 @@ RUN poetry export \
     python3 -m pip install -r requirements.txt && \
     rm requirements.txt && \
     pip3 install torch==1.9.0+cu111 torchvision==0.10.0+cu111 torchaudio==0.9.0 -f https://download.pytorch.org/whl/torch_stable.html && \
-    pip3 install pytorch-lightning tensorboard && \
-    pip3 install scikit-learn matplotlib && \
     rm -rf /root/.cache
 
 RUN echo "/finnessayscore" > \
