@@ -19,6 +19,17 @@ It should have at least the keys:
  * "essay": an array of strings for each line of the essay e.g. ["Lorem ipsum --", "dolar"]
  * "lab_grade": the grade as an string e.g. "3"
 
+## Preprocessing
+
+Convert TKP exam data to the JSON format by using:
+
+    $ python -m finnessayscore.process_tkp tkp.xls tkp.json
+
+Some models need parsed data. In this case, further preprocessing should be
+done like so:
+
+    $ python -m finnessayscore.parse example.json example_parse.json
+
 ## Training/evaluation
 
 Training:
