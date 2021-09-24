@@ -32,6 +32,8 @@ if __name__=="__main__":
     parser.add_argument('--max_length', type=int, default=512, help="max number of token used in the whole essay model")
     parser.add_argument('--run_id', help="Optional run id")
 
+    pl.Trainer.add_argparse_args(parser)
+
     args = parser.parse_args()
     assert args.model_type in ["whole_essay", "sentences", "trunc_essay", "trunc_essay_ord", "pedantic_trunc_essay_ord", "seg_essay"]
     if args.model_type=="sentences":
@@ -85,14 +87,16 @@ if __name__=="__main__":
                                           filename="baseline-{epoch:02d}-{val_acc_lab_grade:.2f}",
                                           save_top_k=1,
                                           mode="max")
-    trainer = pl.Trainer(gpus=1,
-                         accumulate_grad_batches=args.grad_acc,
-                         max_epochs=args.epochs,
-                         progress_bar_refresh_rate=0,
-                         log_every_n_steps=1,
-                         logger=logger,
-                         callbacks=[checkpoint_callback],
-                         fast_dev_run=False)
+    trainer = pl.Trainer.from_argparse_args(
+        args,
+        accumulate_grad_batches=args.grad_acc,
+        max_epochs=args.epochs,
+        progress_bar_refresh_rate=0,
+        log_every_n_steps=1,
+        logger=logger,
+        callbacks=[checkpoint_callback],
+        fast_dev_run=False
+    )
     trainer.fit(model, datamodule=data)
     checkpoint_callback.best_model_path
 
