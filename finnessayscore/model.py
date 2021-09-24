@@ -23,10 +23,15 @@ class AbstractModel(pl.LightningModule):
         self.val_acc = torch.nn.ModuleDict({name: torchmetrics.Accuracy() for name in class_nums})
         self.train_qwk = torch.nn.ModuleDict({name: torchmetrics.CohenKappa(num_classes=len(lst), weights='quadratic') for name, lst in class_nums.items()})
         self.val_qwk = torch.nn.ModuleDict({name: torchmetrics.CohenKappa(num_classes=len(lst), weights='quadratic') for name, lst in class_nums.items()})
-        if class_weights is None:
-            self.class_weights = {name: None for name in class_nums}
-        else:
-            self.class_weights = class_weights
+        # Unfortunately there is no BufferDict yet so we just simulate with name mangling
+        if class_weights is not None:
+            for name, weights in class_weights.items():
+                self.register_buffer("class_weights__" + name, weights)
+
+        class _ClassWeights:
+            def __getitem__(_, key):
+                getattr(self, "class_weights__" + key, None)
+        self.class_weights = _ClassWeights()
         self.config = config
 
     def out_to_cls(self, out):

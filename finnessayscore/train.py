@@ -77,7 +77,7 @@ if __name__=="__main__":
               lr=args.lr,
               label_smoothing=args.use_label_smoothing, smoothing=args.smoothing,
               num_training_steps=train_len//args.batch_size*args.epochs,
-              class_weights={k: v.cuda() for k, v in class_weights.items()},
+              class_weights=class_weights,
               pooling=args.pooling)
     #os.system("rm -rf lightning_logs")
     logger = pl.loggers.TensorBoardLogger("lightning_logs",
