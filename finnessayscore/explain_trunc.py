@@ -138,6 +138,7 @@ def predict_and_explain(trained_model, tokenizer, obj_batch, target_layer_func=l
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument('--gpu', , default=False, action="store_true", help="Use GPU")
     parser.add_argument('--load_checkpoint', required=True, help="Trained model for explainability analysis")
     parser.add_argument('--bert_path', default='TurkuNLP/bert-base-finnish-cased-v1')
     parser.add_argument('--batch_size', type=int, default=8)
@@ -186,7 +187,8 @@ if __name__=="__main__":
                                                                      pooling=args.pooling)
 
     trained_model.eval()
-    trained_model.cuda()
+    if args.gpu:
+        trained_model.cuda()
     aggregates = [] # list of (gold_standard, [attributions for 1-5])
     #count = 0
     import json
