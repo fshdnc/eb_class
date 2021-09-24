@@ -30,6 +30,12 @@ done like so:
 
     $ python -m finnessayscore.parse example.json example_parse.json
 
+You will need to provide the grading scale of your dataset as a pickle file.
+You can generate some standard grading scales with
+`finnessayscore.mk_grade_pickle`.
+
+    $ python -m finnessayscore.mk_grade_pickle outof20 outof20.pkl
+
 ## Training/evaluation
 
 Training:
