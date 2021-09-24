@@ -26,7 +26,7 @@ class AbstractModel(pl.LightningModule):
         if class_weights is None:
             self.class_weights = {name: None for name in class_nums}
         else:
-            self.class_weights = class_weights
+            self.class_weights = {k: v.cuda() for k,v in class_weights.items()}
         self.config = config
 
     def out_to_cls(self, out):
