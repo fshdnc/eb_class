@@ -12,17 +12,26 @@ from finnessayscore import preprocessing
 
 class JsonDataModule(pl.LightningDataModule):
 
-    def __init__(self, fnames_or_files, model_type, batch_size=20, bert_model_name="TurkuNLP/bert-base-finnish-cased-v1", **config):
+    def __init__(self,
+                 fnames_or_files,
+                 model_type,
+                 batch_size=20,
+                 bert_model_name="TurkuNLP/bert-base-finnish-cased-v1",
+                 class_nums_dict={"lab_grade": ["1","2","3","4","5"]},
+                 **config):
         super().__init__(self)
         self.fnames = fnames_or_files
         self.bert_model_name = bert_model_name
         self.batch_size = batch_size
         self.model_type = model_type
+        self.class_nums_dict = class_nums_dict
+        assert isinstance(self.class_nums_dict, dict)
         #self.label_map = {0:5, 1:1, 2:2, 3:3, 4:4}
         self.config = config
 
     def class_nums(self):
-        return {"lab_grade": ["1","2","3","4","5"]}
+        #return {"lab_grade": ["1","2","3","4","5"]}
+        return self.class_nums_dict
 
     def get_label_map(self):
         class_nums = self.class_nums()
@@ -135,7 +144,7 @@ class JsonDataModule(pl.LightningDataModule):
                               return_overflowing_tokens=True, return_offsets_mapping=True)
         new_data = []
         for i, old_i in enumerate(tokenized["overflow_to_sample_mapping"]):
-            new_d = data[old_i]
+            new_d = data[old_i].copy()
             new_d["input_ids"] = torch.LongTensor(tokenized["input_ids"][i])
             new_d["token_type_ids"] = torch.LongTensor(tokenized["token_type_ids"][i])
             new_d["attention_mask"] = torch.LongTensor(tokenized["attention_mask"][i])
