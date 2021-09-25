@@ -46,7 +46,7 @@ Training:
       --model_type whole_essay \
       --jsons /path/to/data.json
 
-A confusion matrix and scores on the development set are printed at the end of
+A confusion matrix and scores on the validation set are printed at the end of
 training.
 
 Results on tensorboard
