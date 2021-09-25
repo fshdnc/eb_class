@@ -94,18 +94,26 @@ if __name__=="__main__":
         progress_bar_refresh_rate=0,
         log_every_n_steps=1,
         logger=logger,
-        callbacks=[checkpoint_callback],
-        fast_dev_run=False
+        callbacks=[checkpoint_callback]
     )
     trainer.fit(model, datamodule=data)
     checkpoint_callback.best_model_path
 
     model.eval()
+    if trainer.gpus is not None and trainer.gpus > 0:
+        model.cuda()
 
     from finnessayscore.evaluate import evaluate
     print("Training set")
     evaluate(data.train_dataloader(), model, data.get_label_map(), model_type=args.model_type)
     print("Validation set")
-    evaluate(data.val_dataloader(), model, data.get_label_map(), model_type=args.model_type, plot_conf_mat=True)
+    evaluate(
+        data.val_dataloader(),
+        model,
+        data.get_label_map(),
+        model_type=args.model_type,
+        plot_conf_mat=True,
+        do_plot_beeswarm=args.model_type.endswith("_ord")
+    )
     
 

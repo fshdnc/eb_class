@@ -5,6 +5,18 @@ from sklearn.metrics import confusion_matrix, cohen_kappa_score
 import matplotlib.pyplot as plt
 import numpy
 import datetime
+import seaborn
+from itertools import islice
+
+
+def savefig_auto(plt, what, base, fname=None):
+    if not fname:
+        fname = base + "_" + str(datetime.datetime.now()).replace(":","").replace(" ","_")
+    if not fname.endswith(".png"):
+        fname = fname + ".png"
+    print(what + " saved to", fname)
+    plt.savefig(fname)
+
 
 def plot_confusion_matrix(conf_matrix, label_map, fname=None):
     norm_conf = []
@@ -43,12 +55,29 @@ def plot_confusion_matrix(conf_matrix, label_map, fname=None):
     plt.yticks(range(height), label_list)
     plt.xlabel("Gold Standard")
     plt.ylabel("Prediction")
-    if not fname:
-        fname = str(datetime.datetime.now()).replace(":","").replace(" ","_")
-    if not fname.endswith(".png"):
-        fname = fname + ".png"
-    print("Confusion matrix saved to", fname)
-    plt.savefig(fname)
+    savefig_auto(plt, "Confusion matrix", "confmat", fname)
+
+
+def plot_beeswarm(outputs, targets, cutoffs, label_map, fname=None):
+    fig = plt.figure()
+    plt.clf()
+    ax = fig.add_subplot(111)
+    ax.set_xlabel('Gold Standard')
+    ax.set_ylabel('Prediction')
+    ax2 = ax.twinx()
+    ax2.set_ylabel('Boundaries')
+    labels = list(label_map.values())
+    seaborn.swarmplot(
+        x=targets,
+        y=outputs,
+        ax=ax,
+        order=labels
+    )
+    for cutoff, label in zip(cutoffs.tolist(), labels[1:]):
+        ax.axhline(y=cutoff)
+        ax.annotate(">=" + label, (ax.get_xlim()[1], cutoff))
+    savefig_auto(plt, "Beeswarm plot", "beeswarm", fname)
+
 
 def _evaluate_seg_essay(dataloader, model, label_map):
     """
@@ -87,23 +116,30 @@ def _evaluate_seg_essay(dataloader, model, label_map):
     new_target = [label_map["lab_grade"][p] for p in new_target]
     return new_preds, new_target
 
-def evaluate(dataloader, model, label_map, model_type, plot_conf_mat=False):
+
+def evaluate(dataloader, model, label_map, model_type, plot_conf_mat=False, do_plot_beeswarm=False):
     if model_type == "seg_essay":
         preds, target = _evaluate_seg_essay(dataloader, model, label_map)
     else:
+        outputs = []
+        preds = []
+        target = []
         with torch.no_grad():
-            preds = []
-            target = []
             for batch in dataloader:
                 needed_for_prediction = ['input_ids', 'attention_mask', 'token_type_ids', "overflow_to_sample_mapping"] # some of the values cannot be put to gpu, filter those out
-                if "trunc_essay" in model_type:
-                    output = model({k: v for k, v in batch.items() if k in needed_for_prediction})
-                elif model_type in ["sentences", "whole_essay"]:
-                    output = model({k: [vv.to(model.device) for vv in v] for k, v in batch.items() if k in needed_for_prediction})
+                if model_type.endswith("_ord"):
+                    forward = model.forward_score
+                    to_cls = model.score_to_cls
+                else:
+                    forward = model
+                    to_cls = model.out_to_cls
+                output = forward({k: [vv.to(model.device) for vv in v] for k, v in batch.items() if k in needed_for_prediction})
+                out = output["lab_grade"][:, 0].tolist()
+                outputs.extend(out)
                 preds.append({
                     k: [int(i) for i in v]
                     for k, v
-                    in model.out_to_cls(output).items()
+                    in to_cls(output).items()
                 })
                 target.append(batch["lab_grade"])
 
@@ -139,5 +175,7 @@ def evaluate(dataloader, model, label_map, model_type, plot_conf_mat=False):
     print("Confusion matrix:\n", conf_mat)
     if plot_conf_mat:
         plot_confusion_matrix(conf_mat, label_map["lab_grade"], fname=None)
+    if do_plot_beeswarm:
+        plot_beeswarm(outputs, target, model.cutoffs_score_scale()["lab_grade"], label_map["lab_grade"], fname=None)
 
 

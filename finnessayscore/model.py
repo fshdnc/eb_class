@@ -201,6 +201,12 @@ class TruncEssayOrdModel(AbstractModel):
     def out_to_cls(self, out):
         return {name: (pred >= 0).sum(axis=1) for name, pred in out.items()}
 
+    def score_to_cls(self, scores):
+        return self.out_to_cls({
+            name: cont_score - self.cutoffs[name]
+            for name, cont_score in scores.items()
+        })
+
     def compute_loss(self, name, pred, gold, weight):
         num_classes = len(self.class_nums[name])
         gold_cut = torch.vstack(
@@ -224,22 +230,36 @@ class TruncEssayOrdModel(AbstractModel):
         """
         return F.binary_cross_entropy_with_logits(pred, gold_cut)
 
-    def forward(self, batch):
+    def _forward_enc(self, batch):
         for k in ["input_ids", "attention_mask", "token_type_ids"]:
-            batch[k] = torch.nn.utils.rnn.pad_sequence(batch[k], batch_first=True)
+            batch[k] = torch.nn.utils.rnn.pad_sequence(
+                batch[k],
+                batch_first=True
+            )
         enc = self.bert(input_ids=batch['input_ids'],
                         attention_mask=batch['attention_mask'],
                         token_type_ids=batch['token_type_ids'])
-        res = {}
-        for name, layer in self.reg_layers.items():
-            cont_score = layer(enc.pooler_output)
-            res[name] = cont_score - self.cutoffs[name]
-        return res
+        return enc
+
+    def forward_score(self, batch):
+        enc = self._forward_enc(batch)
+        return {
+            name: layer(enc.pooler_output)
+            for name, layer in self.reg_layers.items()
+        }
+
+    def cutoffs_score_scale(self):
+        return self.cutoffs
+
+    def forward(self, batch):
+        return {
+            name: cont_score - self.cutoffs[name]
+            for name, cont_score in self.forward_score(batch).items()
+        }
 
 
 def sort_param_inplace(param):
     param.data.copy_(torch.sort(param)[0])
-
 
 
 class PedanticTruncEssayOrdModel(TruncEssayOrdModel):
@@ -262,18 +282,24 @@ class PedanticTruncEssayOrdModel(TruncEssayOrdModel):
             for name in class_nums.keys()
         })
 
+    def forward_score(self, batch):
+        enc = self._forward_enc(batch)
+        return {
+            name: self.norm[name](layer(enc.pooler_output))
+            for name, layer in self.reg_layers.items()
+        }
+
+    def cutoffs_score_scale(self):
+        return {
+            name: cutoff / self.discrim[name]
+            for name, cutoff in self.cutoffs.items()
+        }
+
     def forward(self, batch):
-        for k in ["input_ids", "attention_mask", "token_type_ids"]:
-            batch[k] = torch.nn.utils.rnn.pad_sequence(batch[k], batch_first=True)
-        enc = self.bert(input_ids=batch['input_ids'],
-                        attention_mask=batch['attention_mask'],
-                        token_type_ids=batch['token_type_ids'])
-        res = {}
-        for name, layer in self.reg_layers.items():
-            cont_score_norm = self.norm[name](layer(enc.pooler_output))
-            cont_score = self.discrim[name] * cont_score_norm
-            res[name] = cont_score - self.cutoffs[name]
-        return res
+        return {
+            name: self.discrim[name] * cont_score_norm - self.cutoffs[name]
+            for name, cont_score_norm in self.forward_score(batch).items()
+        }
 
     def optimizer_step(self, *args, **kwargs):
         super().optimizer_step(*args, **kwargs)
