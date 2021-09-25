@@ -241,12 +241,14 @@ class TruncEssayOrdModel(AbstractModel):
                         token_type_ids=batch['token_type_ids'])
         return enc
 
-    def forward_score(self, batch):
-        enc = self._forward_enc(batch)
+    def _score_out(self, enc):
         return {
             name: layer(enc.pooler_output)
             for name, layer in self.reg_layers.items()
         }
+
+    def forward_score(self, batch):
+        self._score_out(self._forward_enc(batch))
 
     def cutoffs_score_scale(self):
         return self.cutoffs
@@ -282,8 +284,7 @@ class PedanticTruncEssayOrdModel(TruncEssayOrdModel):
             for name in class_nums.keys()
         })
 
-    def forward_score(self, batch):
-        enc = self._forward_enc(batch)
+    def _score_out(self, enc):
         return {
             name: self.norm[name](layer(enc.pooler_output))
             for name, layer in self.reg_layers.items()

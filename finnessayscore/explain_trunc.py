@@ -38,6 +38,34 @@ class ExplainTruncEssayClassModel(model.TruncEssayClassModel):
         else: #defaults to cls
             return {name: layer(enc.pooler_output) for name, layer in self.final_layers.items()}
 
+
+class ForwardAsForwardScoreMixin:
+    def forward(
+        self,
+        batch_input_ids,
+        batch_attention_mask,
+        batch_token_type_ids
+    ):
+        enc = self.bert(input_ids=batch_input_ids,
+                        attention_mask=batch_attention_mask,
+                        token_type_ids=batch_token_type_ids)
+        return self._score_out(enc)
+
+
+class ExplainTruncEssayOrdModel(
+    ForwardAsForwardScoreMixin,
+    model.TruncEssayOrdModel
+):
+    pass
+
+
+class ExplainPedanticTruncEssayOrdModel(
+    ForwardAsForwardScoreMixin,
+    model.PedanticTruncEssayOrdModel
+):
+    pass
+
+
 # helper functions
 def predict(input_ids, attention_mask, token_type_ids): #inputs, token_type_ids=None, position_ids=None, attention_mask=None):
     pred = trained_model(input_ids, attention_mask, token_type_ids)
@@ -96,16 +124,20 @@ def build_ref(essay_i, batch, tokenizer, device):
     return (torch.unsqueeze(ref_input_ids, dim=0).to(device),
             torch.unsqueeze(ref_attention_mask, dim=0).to(device),
             torch.unsqueeze(ref_token_type_ids, dim=0).to(device))
-            
+
+
+def get_predictions(obj_batch, device):
+    return predict(torch.nn.utils.rnn.pad_sequence(obj_batch["input_ids"],batch_first=True).to(device),
+                   torch.nn.utils.rnn.pad_sequence(obj_batch["attention_mask"],batch_first=True).to(device),
+                   torch.nn.utils.rnn.pad_sequence(obj_batch["token_type_ids"],batch_first=True).to(device))
+
 
 def predict_and_explain(trained_model, tokenizer, obj_batch, target_layer_func=lambda x: x.bert.embeddings, labels=("1","2","3","4","5")):
+    device = trained_model.device
     trained_model.zero_grad() #to be safe perhaps it's not needed
-    device=trained_model.device
 
     lig = LayerIntegratedGradients(predict, target_layer_func(trained_model)) #trained_model.bert.embeddings)
-    predictions = predict(torch.nn.utils.rnn.pad_sequence(obj_batch["input_ids"],batch_first=True).to(device),
-                          torch.nn.utils.rnn.pad_sequence(obj_batch["attention_mask"],batch_first=True).to(device),
-                          torch.nn.utils.rnn.pad_sequence(obj_batch["token_type_ids"],batch_first=True).to(device),)
+    predictions = get_predictions(obj_batch, device)
 
     aggregate_batch = []
     for i, prediction in enumerate(predictions):
@@ -117,7 +149,6 @@ def predict_and_explain(trained_model, tokenizer, obj_batch, target_layer_func=l
         inp = (obj_batch["input_ids"][i].unsqueeze(0).to(device),
                obj_batch["attention_mask"][i].unsqueeze(0).to(device),
                obj_batch["token_type_ids"][i].unsqueeze(0).to(device))
-        all_tokens = tokenizer.convert_ids_to_tokens(inp[0][0])
         for target, classname in enumerate(labels): # default ("1","2","3","4","5")
             attrs, delta = lig.attribute(inputs=inp,
                                          baselines=ref_input,
@@ -136,9 +167,37 @@ def predict_and_explain(trained_model, tokenizer, obj_batch, target_layer_func=l
     return aggregate_batch
 
 
+def predict_and_explain_ord(trained_model, tokenizer, obj_batch, target_layer_func=lambda x: x.bert.embeddings, labels=("1","2","3","4","5")):
+    device = trained_model.device
+    ligs = [
+        LayerIntegratedGradients(predict, target_layer_func(trained_model)),
+        LayerIntegratedGradients(lambda *args, **kwargs: -predict(*args, **kwargs), target_layer_func(trained_model)),
+    ]
+    predictions = get_predictions(obj_batch, device)
+    aggregate_batch = []
+    for i, prediction in enumerate(predictions):
+        aggregate_essay = []
+        print("Gold standard:", obj_batch["lab_grade"][i])
+        print("Prediction:", prediction)
+        ref_input = build_ref(i, obj_batch, tokenizer, device)
+        inp = (obj_batch["input_ids"][i].unsqueeze(0).to(device),
+               obj_batch["attention_mask"][i].unsqueeze(0).to(device),
+               obj_batch["token_type_ids"][i].unsqueeze(0).to(device))
+        for lig in ligs:
+            attrs, delta = lig.attribute(inputs=inp,
+                                         baselines=ref_input,
+                                         return_convergence_delta=True,
+                                         internal_batch_size=1)
+            attrs_sum = summarize_attributions(attrs)
+            aggregated = aggregate(inp, attrs_sum, tokenizer)
+            aggregate_essay.append(aggregated)
+        aggregate_batch.append((obj_batch["lab_grade"][i].tolist(), prediction.tolist()[0], aggregate_essay))
+    return aggregate_batch
+
+
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--gpu', , default=False, action="store_true", help="Use GPU")
+    parser.add_argument('--gpu', default=False, action="store_true", help="Use GPU")
     parser.add_argument('--load_checkpoint', required=True, help="Trained model for explainability analysis")
     parser.add_argument('--bert_path', default='TurkuNLP/bert-base-finnish-cased-v1')
     parser.add_argument('--batch_size', type=int, default=8)
@@ -176,15 +235,26 @@ if __name__=="__main__":
                                       model_type=args.model_type,
                                       class_nums_dict=args.class_nums if args.class_nums else {"lab_grade": ["1","2","3","4","5"]})
     data.setup()
+    class_weights = data.get_class_weights()
 
     # model
     tokenizer = AutoTokenizer.from_pretrained(args.bert_path)
 
-    trained_model = ExplainTruncEssayClassModel.load_from_checkpoint(checkpoint_path=args.load_checkpoint,
-                                                                     bert_model=args.bert_path,
-                                                                     class_nums=data.class_nums(),
-                                                                     label_smoothing=args.use_label_smoothing,
-                                                                     pooling=args.pooling)
+    if args.model_type == "pedantic_trunc_essay_ord":
+        model_cls = ExplainPedanticTruncEssayOrdModel
+        predict_and_explain_func = predict_and_explain_ord
+    elif args.model_type == "trunc_essay_ord":
+        model_cls = ExplainTruncEssayOrdModel
+        predict_and_explain_func = predict_and_explain_ord
+    else:
+        model_cls = ExplainTruncEssayClassModel
+        predict_and_explain_func = predict_and_explain
+    trained_model = model_cls.load_from_checkpoint(checkpoint_path=args.load_checkpoint,
+                                                   bert_model=args.bert_path,
+                                                   class_nums=data.class_nums(),
+                                                   label_smoothing=args.use_label_smoothing,
+                                                   pooling=args.pooling,
+                                                   class_weights=class_weights)
 
     trained_model.eval()
     if args.gpu:
@@ -199,8 +269,9 @@ if __name__=="__main__":
     t = lambda x: x.bert.encoder.layer[l]
     for batch in data.val_dataloader():
         if count<30:
-            agg_batch = predict_and_explain(trained_model, tokenizer, batch,
-                                            labels=args.class_nums["lab_grade"] if args.class_nums else ("1","2","3","4","5"))
+            agg_batch = predict_and_explain_func(
+                trained_model, tokenizer, batch,
+                labels=args.class_nums["lab_grade"] if args.class_nums else ("1","2","3","4","5"))
             agg_layer.extend(agg_batch)
             count += 1
     aggregates.append(agg_layer)
@@ -211,8 +282,9 @@ if __name__=="__main__":
         t = lambda x: x.bert.encoder.layer[l]
         for batch in data.val_dataloader():
             if count<30:
-                agg_batch = predict_and_explain(trained_model, tokenizer, batch, target_layer_func=t,
-                                                labels=args.class_nums["lab_grade"] if args.class_nums else ("1","2","3","4","5"))
+                agg_batch = predict_and_explain_func(
+                    trained_model, tokenizer, batch, target_layer_func=t,
+                    labels=args.class_nums["lab_grade"] if args.class_nums else ("1","2","3","4","5"))
                 agg_layer.extend(agg_batch)
             count += 1
         aggregates.append(agg_layer)
