@@ -27,6 +27,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+
       - name: Build/push TNPP
         uses: whoan/docker-build-with-cache-action@v5
         with:
@@ -40,6 +43,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+
       - name: Build/push FiNER
         uses: whoan/docker-build-with-cache-action@v5
         with:
