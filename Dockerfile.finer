@@ -1,0 +1,12 @@
+FROM python:3
+
+WORKDIR /usr/src/app
+ENV VIRTUAL_ENV=/usr/src/app/venv-tnpp
+RUN python3 -m venv $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
+RUN cd /usr/src && rmdir app && git checkout --recurse-submodules https://github.com/spyysalo/keras-bert-ner.git app
+
+RUN ./scripts/get-models.sh
+
+CMD python3 predict.py

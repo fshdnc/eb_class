@@ -22,3 +22,21 @@ jobs:
           image_name: fshdnc/eb_class
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build/push TNPP
+        uses: whoan/docker-build-with-cache-action@v5
+        with:
+          registry: ghcr.io
+          dockerfile: Dockerfile.tnpp
+          image_name: fshdnc/finnessayscore_tnpp
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build/push FiNER
+        uses: whoan/docker-build-with-cache-action@v5
+        with:
+          registry: ghcr.io
+          dockerfile: Dockerfile.finer
+          image_name: fshdnc/finnessayscore_finer
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
