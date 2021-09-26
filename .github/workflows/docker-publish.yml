@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  build_publish_containers:
+  build_publish_container:
     runs-on: ubuntu-latest
 
     steps:
@@ -23,6 +23,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+  build_publish_tnpp:
+    runs-on: ubuntu-latest
+
+    steps:
       - name: Build/push TNPP
         uses: whoan/docker-build-with-cache-action@v5
         with:
@@ -32,6 +36,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+  build_publish_finer:
+    runs-on: ubuntu-latest
+
+    steps:
       - name: Build/push FiNER
         uses: whoan/docker-build-with-cache-action@v5
         with:
