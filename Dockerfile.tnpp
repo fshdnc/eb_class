@@ -1,11 +1,13 @@
 FROM python:3
 
+RUN cd /usr/src && \
+    rm -rf app && \
+    git checkout https://github.com/TurkuNLP/Turku-neural-parser-pipeline.git app
+
 WORKDIR /usr/src/app
 ENV VIRTUAL_ENV=/usr/src/app/venv-tnpp
 RUN python3 -m venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-
-RUN cd /usr/src && rmdir app && git checkout https://github.com/TurkuNLP/Turku-neural-parser-pipeline.git app
 
 RUN pip3 install --upgrade pip
 RUN pip3 install --upgrade --no-cache-dir -r requirements.txt
