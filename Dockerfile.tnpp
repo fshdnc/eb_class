@@ -2,7 +2,7 @@ FROM python:3
 
 RUN cd /usr/src && \
     rm -rf app && \
-    git checkout https://github.com/TurkuNLP/Turku-neural-parser-pipeline.git app
+    git clone https://github.com/TurkuNLP/Turku-neural-parser-pipeline.git app
 
 WORKDIR /usr/src/app
 ENV VIRTUAL_ENV=/usr/src/app/venv-tnpp
