@@ -31,6 +31,7 @@ if __name__=="__main__":
     parser.add_argument('--pooling', default="cls", help="only implemented for trunc_essay model, cls or mean")
     parser.add_argument('--max_length', type=int, default=512, help="max number of token used in the whole essay model")
     parser.add_argument('--run_id', help="Optional run id")
+    #parser.add_argument('--gpus', default=None, help="Number of gpus")
 
     pl.Trainer.add_argparse_args(parser)
 
@@ -83,8 +84,8 @@ if __name__=="__main__":
     logger = pl.loggers.TensorBoardLogger("lightning_logs",
                                           name=args.run_id,
                                           version="latest")
-    checkpoint_callback = ModelCheckpoint(monitor='val_acc_lab_grade',
-                                          filename="baseline-{epoch:02d}-{val_acc_lab_grade:.2f}",
+    checkpoint_callback = ModelCheckpoint(monitor='val_qwk_lab_grade',
+                                          filename="baseline-{epoch:02d}-{val_acc_qwk_grade:.2f}",
                                           save_top_k=1,
                                           mode="max")
     trainer = pl.Trainer.from_argparse_args(
@@ -94,7 +95,8 @@ if __name__=="__main__":
         progress_bar_refresh_rate=0,
         log_every_n_steps=1,
         logger=logger,
-        callbacks=[checkpoint_callback]
+        callbacks=[checkpoint_callback],
+        #gpus=args.gpus
     )
     trainer.fit(model, datamodule=data)
     checkpoint_callback.best_model_path
@@ -113,7 +115,9 @@ if __name__=="__main__":
         data.get_label_map(),
         model_type=args.model_type,
         plot_conf_mat=True,
-        do_plot_beeswarm=args.model_type.endswith("_ord")
+        do_plot_beeswarm=args.model_type.endswith("_ord"),
+        do_plot_prob=True,
+        fname=args.run_id
     )
     
 
