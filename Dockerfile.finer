@@ -5,10 +5,10 @@ RUN cd /usr/src && \
     git clone --recurse-submodules https://github.com/spyysalo/keras-bert-ner.git app
 
 WORKDIR /usr/src/app
-ENV VIRTUAL_ENV=/usr/src/app/venv-tnpp
-RUN python3 -m venv $VIRTUAL_ENV
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-RUN ./scripts/get-models.sh
+RUN wget http://dl.turkunlp.org/turku-ner-models/combined-ext-model-130220.tar.gz &&
+  tar xvzf combined-ext-model-130220.tar.gz
 
-CMD python3 predict.py
+RUN pip install flask keras-bert
+
+CMD python3 predict.py --ner_model_dir combined-ext-model
