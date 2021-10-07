@@ -43,4 +43,4 @@ rule get_tnpp_output:
     shell:
         "python /usr/src/app/full_pipeline_stream.py "
         "--conf-yaml /usr/src/app/models_fi_tdt_dia/pipelines.yaml "
-        "--gpu -1 parse_plaintext < {input} > {output}"
+        "--device 0 parse_plaintext < {input} > {output}"
