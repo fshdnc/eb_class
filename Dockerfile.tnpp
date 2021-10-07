@@ -1,0 +1,27 @@
+FROM python:3
+
+RUN cd /usr/src && \
+    rm -rf app && \
+    git clone https://github.com/TurkuNLP/Turku-neural-parser-pipeline.git app
+
+WORKDIR /usr/src/app
+ENV VIRTUAL_ENV=/usr/src/app/venv-tnpp
+RUN python3 -m venv $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
+RUN pip3 install --upgrade pip
+RUN pip3 install --upgrade --no-cache-dir -r requirements.txt
+
+ARG MODEL=fi_tdt_dia
+ARG PIPELINE=parse_plaintext
+ARG PORT=7689
+ARG MAX_CHARS=0
+
+ENV TNPP_MODEL models_${MODEL}/pipelines.yaml
+ENV TNPP_PIPELINE ${PIPELINE}
+ENV TNPP_PORT ${PORT}
+ENV TNPP_MAX_CHARS ${MAX_CHARS}
+
+RUN python3 fetch_models.py $MODEL
+
+CMD python3 full_pipeline_stream.py --conf-yaml "${TNPP_MODEL}" --gpu -1 "${TNPP_PIPELINE}"

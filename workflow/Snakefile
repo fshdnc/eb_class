@@ -1,0 +1,46 @@
+from os.path import join as pjoin
+
+
+RAW_DATASETS = config["RAW_DATASETS"]
+WORK = "work"
+DATASETS = pjoin(WORK, "datasets")
+
+
+rule all:
+    input:
+        pjoin(DATASETS, "tkp2_exam.finer"),
+        pjoin(DATASETS, "tkp2_exam.tnpp")
+
+
+rule preprocess_tkp2:
+    input:
+        pjoin(RAW_DATASETS, "TKP2_tentit.xls")
+    output:
+        pjoin(DATASETS, "tkp2_exam.json")
+    shell:
+        "mkdir -p " + DATASETS +
+        " && python -m finnessayscore.process_tkp {input} {output}"
+        
+
+rule get_finer_output:
+    input:
+        pjoin(DATASETS, "tkp2_exam.json")
+    output:
+        pjoin(DATASETS, "tkp2_exam.finer")
+    singularity:
+        "docker://ghcr.io/fshdnc/finnessayscore_finer:latest"
+    shell:
+        "python /usr/src/app/predict.py {input} {output}"
+
+
+rule get_tnpp_output:
+    input:
+        pjoin(DATASETS, "tkp2_exam.json")
+    output:
+        pjoin(DATASETS, "tkp2_exam.tnpp")
+    singularity:
+        "docker://ghcr.io/fshdnc/finnessayscore_tnpp:latest"
+    shell:
+        "python /usr/src/app/full_pipeline_stream.py "
+        "--conf-yaml /usr/src/app/models_fi_tdt_dia/pipelines.yaml "
+        "--gpu -1 parse_plaintext < {input} > {output}"

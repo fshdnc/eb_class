@@ -21,7 +21,7 @@ It should have at least the keys:
 
 ## Preprocessing
 
-Convert TKP exam data to the JSON format by using:
+Convert TKP2 exam data to the JSON format by using:
 
     $ python -m finnessayscore.process_tkp tkp.xls tkp.json
 
@@ -32,7 +32,7 @@ done like so:
 
 You will need to provide the grading scale of your dataset as a pickle file.
 You can generate some standard grading scales with
-`finnessayscore.mk_grade_pickle`.
+`finnessayscore.mk_grade_pickle` e.g. for the TKP2 20-point scale:
 
     $ python -m finnessayscore.mk_grade_pickle outof20 outof20.pkl
 
@@ -46,7 +46,7 @@ Training:
       --model_type whole_essay \
       --jsons /path/to/data.json
 
-A confusion matrix and scores on the development set are printed at the end of
+A confusion matrix and scores on the validation set are printed at the end of
 training.
 
 Results on tensorboard
@@ -56,4 +56,13 @@ Results on tensorboard
 
 ## Explainability
 
-TODO
+Getting explanation jsons using for example TKP2 dataset:
+
+    $ python -m finnessayscore.explain_trunc \
+      --gpu \
+      --model_type pedantic_trunc_essay_ord \
+      --class_nums /path/to/outof20.pkl \
+      --load_checkpoint /path/to/out/checkpoint.ckpt \
+      --jsons /path/to/tkp2_exam.json
+
+You can then view them by modifying the `explain-trunc.ipynb` Jupyter notebook.

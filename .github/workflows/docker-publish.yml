@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  build_publish_containers:
+  build_publish_container:
     runs-on: ubuntu-latest
 
     steps:
@@ -20,5 +20,37 @@ jobs:
         with:
           registry: ghcr.io
           image_name: fshdnc/eb_class
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+  build_publish_tnpp:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+
+      - name: Build/push TNPP
+        uses: whoan/docker-build-with-cache-action@v5
+        with:
+          registry: ghcr.io
+          dockerfile: Dockerfile.tnpp
+          image_name: fshdnc/finnessayscore_tnpp
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+  build_publish_finer:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+
+      - name: Build/push FiNER
+        uses: whoan/docker-build-with-cache-action@v5
+        with:
+          registry: ghcr.io
+          dockerfile: Dockerfile.finer
+          image_name: fshdnc/finnessayscore_finer
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
