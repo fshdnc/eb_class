@@ -16,7 +16,7 @@ xlrd = "^2.0.1"
 Pattern = "^3.6"
 tensorboard = "^2.6.0"
 seaborn = "^0.11.2"
-snakemake = "^6.8.1"
+snakemake = {git = "https://github.com/frankier/snakemake.git", rev = "only-bind-for-python-script"}
 
 [tool.poetry.dev-dependencies]
 
