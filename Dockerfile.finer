@@ -9,6 +9,6 @@ WORKDIR /usr/src/app
 RUN wget http://dl.turkunlp.org/turku-ner-models/combined-ext-model-130220.tar.gz && \
   tar xvzf combined-ext-model-130220.tar.gz
 
-RUN pip install flask keras-bert
+RUN pip install flask keras-bert tensorflow
 
 CMD python3 predict.py --ner_model_dir combined-ext-model
