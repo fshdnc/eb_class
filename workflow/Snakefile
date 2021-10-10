@@ -41,6 +41,6 @@ rule get_tnpp_output:
     singularity:
         "docker://ghcr.io/fshdnc/finnessayscore_tnpp:latest"
     shell:
-        "python /usr/src/app/full_pipeline_stream.py "
-        "--conf-yaml /usr/src/app/models_fi_tdt_dia/pipelines.yaml "
-        "--device 0 parse_plaintext < {input} > {output}"
+        "PYTHONPATH=/usr/src/app/:${{PYTHONPATH:-}} "
+        "python -m preproc_tnpp.parse "
+        "--gpu {input} {output}"
