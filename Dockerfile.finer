@@ -1,4 +1,4 @@
-FROM python:3.9
+FROM nvcr.io/nvidia/tensorflow:21.09-tf2-py3
 
 RUN cd /usr/src && \
     rm -rf app && \
@@ -9,7 +9,7 @@ WORKDIR /usr/src/app
 RUN wget http://dl.turkunlp.org/turku-ner-models/combined-ext-model-130220.tar.gz && \
   tar xvzf combined-ext-model-130220.tar.gz
 
-RUN pip install flask keras-bert tensorflow
+RUN pip install flask keras-bert
 
 COPY preproc_finer .
 
