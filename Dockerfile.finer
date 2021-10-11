@@ -7,7 +7,8 @@ RUN cd /usr/src && \
 WORKDIR /usr/src/app
 
 RUN wget http://dl.turkunlp.org/turku-ner-models/combined-ext-model-130220.tar.gz && \
-  tar xvzf combined-ext-model-130220.tar.gz
+  tar xvzf combined-ext-model-130220.tar.gz && \
+  rm combined-ext-model-130220.tar.gz
 
 RUN pip install flask keras-bert
 
