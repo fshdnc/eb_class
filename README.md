@@ -19,7 +19,29 @@ It should have at least the keys:
  * "essay": an array of strings for each line of the essay e.g. ["Lorem ipsum --", "dolar"]
  * "lab_grade": the grade as an string e.g. "3"
 
-## Preprocessing
+## Preprocessing (new)
+
+You can run the Snakefile with Snakemake. It should work locally with:
+
+  $ snakemake all -C RAW_DATASETS=/path/to/raw_datasets/
+
+If using SLURM+Singulairty you can use
+[singslurm2](https://github.com/frankier/singslurm2). You will need to make
+a configuration for your cluster `clusc.json` and then run:
+
+```
+CLUSTER_CONFIG=`pwd`/clusc.json \
+SIF_PATH=/path/to/my.sif \
+SNAKEFILE=/finnessayscore/workflow/Snakefile \
+RESTART_TIMES=0 \
+$SINGSLURM2/entrypoint.sh \
+--use-singularity \
+--singularity-args '"--nv"' \
+all \
+-C RAW_DATASETS=/path/to/raw_datasets/
+```
+
+## Preprocessing (old)
 
 Convert TKP2 exam data to the JSON format by using:
 
