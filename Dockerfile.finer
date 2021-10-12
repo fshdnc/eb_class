@@ -13,5 +13,3 @@ RUN wget http://dl.turkunlp.org/turku-ner-models/combined-ext-model-130220.tar.g
 RUN pip install flask keras-bert
 
 COPY preproc_finer .
-
-CMD python3 predict.py --ner_model_dir combined-ext-model

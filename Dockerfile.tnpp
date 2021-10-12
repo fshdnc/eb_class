@@ -25,5 +25,3 @@ ENV PYTHONPATH /usr/src/app/
 RUN python3 fetch_models.py $MODEL
 
 COPY preproc_tnpp .
-
-CMD python3 full_pipeline_stream.py --conf-yaml "${TNPP_MODEL}" --gpu -1 "${TNPP_PIPELINE}"
