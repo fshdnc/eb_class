@@ -15,9 +15,13 @@ def parse(pipeline, txt):
     # txt be a paragraph
     txt_parsed = pipeline.parse(txt)
     sents = []
-    lemmas = []
+    lemma_sents = []
+    surfs = []
+    upos = []
     txt_parsed = txt_parsed.split("\n\n")
     for sent_parsed in txt_parsed:
+        surf_sent = []
+        upos_sent = []
         lemma_sent = []
         for line in sent_parsed.split("\n"):
             line = line.strip()
@@ -32,10 +36,14 @@ def parse(pipeline, txt):
             if "-" in cols[ID]:
                 continue  # multiword token or multitoken word
             lemma_sent.append(cols[LEMMA])
-        lemmas.append(" ".join(lemma_sent))
-    lemmas = [lemma for lemma in lemmas if lemma]  # remove empty
+            surf_sent.append(cols[FORM])
+            upos_sent.append(cols[UPOS])
+        lemma_sents.append(" ".join(lemma_sent))
+        surfs.append(surf_sent)
+        upos.append(upos_sent)
+    lemma_sents = [lemma for lemma in lemma_sents if lemma]  # remove empty
 
-    return lemmas, sents
+    return sents, lemma_sents, surfs, upos
 
 
 def main():
@@ -65,9 +73,15 @@ def main():
         data = json.load(f)
 
     for essay in data:
-        lemmas, sents = parse(pipeline, " ".join(essay["essay"]))
-        essay["lemma"] = lemmas
+        sents, lemma_sents, surfs, upos = parse(
+            pipeline,
+            " ".join(essay["essay"])
+        )
+
+        essay["lemma"] = lemma_sents
         essay["sents"] = sents
+        essay["surfs"] = surfs
+        essay["upos"] = upos
 
     with open(args.output_json, "wt") as f:
         json.dump(data, f, indent=4, ensure_ascii=False, sort_keys=True)
