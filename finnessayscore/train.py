@@ -17,46 +17,27 @@ def print_n_return(item):
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--load_checkpoint', default=None)
-    parser.add_argument('--bert_path', default='TurkuNLP/bert-base-finnish-cased-v1')
-    parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--epochs', type=int, default=3)
     parser.add_argument('--lr', type=float, default=1e-5)
     parser.add_argument('--use_label_smoothing', default=False, action="store_true", help="Use label smoothing")
     parser.add_argument('--smoothing', type=float, default=0, help="0: one-hot method, 0<x<1: smooth method")
-    parser.add_argument('--class_nums',type=str,help="pickle file with stored class_nums")
-    parser.add_argument('--jsons',nargs="+",help="JSON(s) with the data")
     parser.add_argument('--grad_acc', type=int, default=1)
-    parser.add_argument('--whole_essay_overlap', type=int, default=10)
-    parser.add_argument('--model_type', default="sentences", help="trunc_essay, whole_essay, seg_essay, sentences, trunc_essay_ord, or pedantic_trunc_essay_ord")
     parser.add_argument('--pooling', default="cls", help="only implemented for trunc_essay model, cls or mean")
-    parser.add_argument('--max_length', type=int, default=512, help="max number of token used in the whole essay model")
     parser.add_argument('--run_id', help="Optional run id")
     #parser.add_argument('--gpus', default=None, help="Number of gpus")
 
     pl.Trainer.add_argparse_args(parser)
+    data_reader.JsonDataModule.add_argparse_args(parser)
 
     args = parser.parse_args()
-    assert args.model_type in ["whole_essay", "sentences", "trunc_essay", "trunc_essay_ord", "pedantic_trunc_essay_ord", "seg_essay"]
-    if args.model_type=="sentences":
-        for j in args.jsons:
-            assert "parsed" in j
     if args.use_label_smoothing:
         assert args.smoothing <1 and args.smoothing>=0
     print(args)
     if not args.run_id:
         args.run_id = str(datetime.datetime.now()).replace(":","").replace(" ","_")
     print("RUN_ID", args.run_id, sep="\t")
-    if args.class_nums:
-        with open(args.class_nums, "rb") as f:
-            args.class_nums = pickle.load(f)
 
-    data = data_reader.JsonDataModule(args.jsons,
-                                      batch_size=args.batch_size,
-                                      bert_model_name=args.bert_path,
-                                      model_type=args.model_type,
-                                      stride=args.whole_essay_overlap,
-                                      max_token=args.max_length,
-                                      class_nums_dict=args.class_nums if args.class_nums else {"lab_grade": ["1","2","3","4","5"]})
+    data = data_reader.JsonDataModule.from_argparse_args(args)
     data.setup()
     train_len, dev_len, test_len = data.data_sizes()
 
@@ -74,7 +55,7 @@ if __name__=="__main__":
         m = model.TruncEssayClassModel
     #model = model.ProjectionClassModel(data.class_nums(),
     model = m(data.class_nums(),
-              bert_model=args.bert_path,
+              bert_model=args.bert_model,
               lr=args.lr,
               label_smoothing=args.use_label_smoothing, smoothing=args.smoothing,
               num_training_steps=train_len//args.batch_size*args.epochs,

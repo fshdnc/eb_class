@@ -56,19 +56,20 @@ def evaluate(dataloader, model, label_map, plot_conf_mat=False, fname=None):
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--load_checkpoint', default=None)
-    parser.add_argument('--bert_path', default='TurkuNLP/bert-base-finnish-cased-v1')
+    parser.add_argument('--bert_model_name', default='TurkuNLP/bert-base-finnish-cased-v1')
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--epochs', type=int, default=3)
     parser.add_argument('--lr', type=float, default=1e-5)
-    parser.add_argument('--jsons',nargs="+",help="JSON(s) with the data")
+    parser.add_argument('--data_dir',help="Directory containing pre-split dataset train.json, val.json and test.json")
 
 
     args = parser.parse_args()
     run_id = str(datetime.datetime.now()).replace(":","").replace(" ","_")
 
-    data = data_reader.JsonDataModule(args.jsons,
+    data = data_reader.JsonDataModule(args.data_dir,
+                                      "whole_essay",
                                       batch_size=args.batch_size,
-                                      bert_model_name=args.bert_path)
+                                      bert_model_name=args.bert_model_name)
     data.setup()
     train_len, dev_len, test_len = data.data_sizes()
 

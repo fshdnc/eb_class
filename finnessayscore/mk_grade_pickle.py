@@ -1,6 +1,7 @@
 import argparse
 from pathlib import Path
 import pickle
+from .grade_scale import mk_grade
 
 
 def main():
@@ -9,11 +10,7 @@ def main():
     parser.add_argument('out', type=Path)
 
     args = parser.parse_args()
-
-    if args.grade_scale == "fivehigh":
-        res = {"lab_grade": [str(grade) for grade in range(1, 6)]}
-    elif args.grade_scale == "outof20":
-        res = {"lab_grade": [str(grade) for grade in range(21)]}
+    res = mk_grade(args.grade_scale)
 
     with open(args.out, "wb") as outf:
         pickle.dump(res, outf)

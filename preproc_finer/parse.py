@@ -4,7 +4,7 @@ import json
 from pprint import pprint
 
 from argparse import ArgumentParser
-from common import encode, read_conll, process_sentences, load_ner_model
+from common import encode, process_sentences, load_ner_model
 from config import DEFAULT_BATCH_SIZE
 
 
@@ -15,7 +15,7 @@ def mk_argparser():
         help='Batch size for training'
     )
     argparser.add_argument(
-        '--ner_model_dir', default=None,
+        '--ner_model_dir', default="/usr/src/app/combined-ext-model",
         help='Trained NER model directory'
     )
     argparser.add_argument(

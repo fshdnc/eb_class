@@ -183,18 +183,15 @@ def predict_and_explain(trained_model, tokenizer, obj_batch):
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--load_checkpoint', default=None)
-    parser.add_argument('--bert_path', default='TurkuNLP/bert-base-finnish-cased-v1')
-    parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--epochs', type=int, default=3)
     parser.add_argument('--lr', type=float, default=1e-5)
     parser.add_argument('--use_label_smoothing', default=False, action="store_true", help="Use label smoothing")
     parser.add_argument('--smoothing', type=float, default=0, help="0: one-hot method, 0<x<1: smooth method")
-    parser.add_argument('--jsons',nargs="+",help="JSON(s) with the data")
     parser.add_argument('--grad_acc', type=int, default=1)
-    parser.add_argument('--whole_essay_overlap', type=int, default=10)
-    parser.add_argument('--model_type', default="sentences", help="trunc_essay, whole_essay, seg_essay, or sentences")
-    parser.add_argument('--max_length', type=int, default=512, help="max number of token used in the whole essay model")
     parser.add_argument('--run_id', help="Optional run id")
+
+    pl.Trainer.add_argparse_args(parser)
+    data_reader.JsonDataModule.add_argparse_args(parser)
 
     args = parser.parse_args()
 
@@ -202,12 +199,7 @@ if __name__=="__main__":
     checkpoint = "best_model.ckpt"
 
     # data
-    data = data_reader.JsonDataModule(args.jsons,
-                                      batch_size=args.batch_size,
-                                      bert_model_name=args.bert_path,
-                                      stride=args.whole_essay_overlap,
-                                      max_token=args.max_length,
-                                      model_type=args.model_type)
+    data = data_reader.JsonDataModule.from_argparse_args(args)
     data.setup()
 
     # model

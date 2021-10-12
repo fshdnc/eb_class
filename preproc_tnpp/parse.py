@@ -49,9 +49,12 @@ def main():
     if args.gpu:
         # simulates someone giving a --device 0 parameter to Udify
         extra_args.__dict__["udify_mod.device"] = "0"
+        extra_args.__dict__["lemmatizer_mod.device"] = "0"
     else:
         extra_args.__dict__["udify_mod.device"] = "-1"
-    extra_args.__dict__["lemmatizer_mod.device"] = "-1"
+        extra_args.__dict__["lemmatizer_mod.device"] = "-1"
+    # Unclear whether this is needed (is the lemmatiser compatible with the GPU
+    # extra_args.__dict__["lemmatizer_mod.device"] = "-1"
 
     # {pipeline_name -> its steps}
     available_pipelines = read_pipelines(DEFAULT_PIPELINES_YAML)

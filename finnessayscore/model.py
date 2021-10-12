@@ -248,7 +248,7 @@ class TruncEssayOrdModel(AbstractModel):
         }
 
     def forward_score(self, batch):
-        self._score_out(self._forward_enc(batch))
+        return self._score_out(self._forward_enc(batch))
 
     def cutoffs_score_scale(self):
         return self.cutoffs

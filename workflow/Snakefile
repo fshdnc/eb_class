@@ -4,12 +4,15 @@ from os.path import join as pjoin
 RAW_DATASETS = config["RAW_DATASETS"]
 WORK = "work"
 DATASETS = pjoin(WORK, "datasets")
+SCALES = pjoin(WORK, "scales")
 
 
 rule all:
     input:
-        pjoin(DATASETS, "tkp2_exam.finer"),
-        pjoin(DATASETS, "tkp2_exam.tnpp")
+        pjoin(DATASETS, "tkp2_exam_sentences"),
+        pjoin(DATASETS, "tkp2_exam_essays"),
+        pjoin(SCALES, "fivehigh.pkl"),
+        pjoin(SCALES, "outof20.pkl"),
 
 
 rule preprocess_tkp2:
@@ -20,17 +23,6 @@ rule preprocess_tkp2:
     shell:
         "mkdir -p " + DATASETS +
         " && python -m finnessayscore.process_tkp {input} {output}"
-        
-
-rule get_finer_output:
-    input:
-        pjoin(DATASETS, "tkp2_exam.json")
-    output:
-        pjoin(DATASETS, "tkp2_exam.finer")
-    singularity:
-        "docker://ghcr.io/fshdnc/finnessayscore_finer:latest"
-    shell:
-        "python /usr/src/app/predict.py {input} {output}"
 
 
 rule get_tnpp_output:
@@ -39,8 +31,56 @@ rule get_tnpp_output:
     output:
         pjoin(DATASETS, "tkp2_exam.tnpp")
     singularity:
-        "docker://ghcr.io/fshdnc/finnessayscore_tnpp:latest"
+        "docker://ghcr.io/fshdnc/finnessayscore_tnpp@sha256:39ece6eef49131923553588b45ad3e61226cb2345c1af9f16e5d0fc9b8f88028"
     shell:
         "PYTHONPATH=/usr/src/app/:${{PYTHONPATH:-}} "
         "python -m preproc_tnpp.parse "
-        "--gpu {input} {output}"
+        "{input} {output}"
+
+
+# XXX: Currently not working + not in use
+rule get_finer_output:
+    input:
+        pjoin(DATASETS, "tkp2_exam.tnpp")
+    output:
+        pjoin(DATASETS, "tkp2_exam.finer")
+    singularity:
+        "docker://ghcr.io/fshdnc/finnessayscore_finer@sha256:bedcd2487787f9721b061766a2e87beec65757b9f3b9d04a940d24ed62ca2e89"
+    shell:
+        "PYTHONPATH=/usr/src/app/:${{PYTHONPATH:-}} "
+        "python -m preproc_finer.parse "
+        "{input} {output}"
+
+
+rule mk_splits:
+    input:
+        pjoin(DATASETS, "tkp2_exam.tnpp")
+    output:
+        directory(pjoin(DATASETS, "tkp2_exam_split"))
+    shell:
+        "mkdir -p {output} && python -m finnessayscore.preproc.split {input} {output}"
+
+
+rule clean_sentences:
+    input:
+        pjoin(DATASETS, "tkp2_exam_split")
+    output:
+        directory(pjoin(DATASETS, "tkp2_exam_sentences"))
+    shell:
+        "python -m finnessayscore.preproc.clean --level sentences {input} {output}"
+
+
+rule clean_essays:
+    input:
+        pjoin(DATASETS, "tkp2_exam_split")
+    output:
+        directory(pjoin(DATASETS, "tkp2_exam_essays"))
+    shell:
+        "python -m finnessayscore.preproc.clean --level essays {input} {output}"
+
+
+rule mk_grade_scale:
+    output:
+        pjoin(SCALES, "{scale}.pkl"),
+    shell:
+        "python -m finnessayscore.mk_grade_pickle {wildcards.scale} {output}"

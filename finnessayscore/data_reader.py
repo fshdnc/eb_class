@@ -1,8 +1,10 @@
 import json
 import sys
 import collections
-import random
-random.seed(0)
+from os.path import join as pjoin
+from typing import Union, Dict, Any
+import pickle
+from .grade_scale import DEFAULT_GRADE_SCALE
 
 import pytorch_lightning as pl
 import transformers
@@ -10,27 +12,44 @@ import torch
 
 from finnessayscore import preprocessing
 
+
 class JsonDataModule(pl.LightningDataModule):
 
+    batch_size: int = 0
+
     def __init__(self,
-                 fnames_or_files,
-                 model_type,
-                 batch_size=20,
-                 bert_model_name="TurkuNLP/bert-base-finnish-cased-v1",
-                 class_nums_dict={"lab_grade": ["1","2","3","4","5"]},
+                 data_dir: str,
+                 model_type: str,
+                 batch_size: int = 20,
+                 bert_model: str = "TurkuNLP/bert-base-finnish-cased-v1",
+                 class_nums: Union[Dict[str, Any], str] = DEFAULT_GRADE_SCALE,
+                 stride: int = 10,
+                 max_length: int = 512,
                  **config):
+        """Module for loading a pre-prepared directory containing a JSON file per split
+
+        Args:
+            data_dir: Directory containing pre-split dataset train.json, val.json and test.json
+            model_type: Either trunc_essay, whole_essay, seg_essay, sentences, trunc_essay_ord, or pedantic_trunc_essay_ord
+            class_nums: Pickle file with stored class_nums
+            stride: Applies only when using whole_essay. The stride to use when feeding in multiple segments.
+            max_length: Maximum length in BERT subword tokens when using whole_essay or seg_essay
+        """
         super().__init__(self)
-        self.fnames = fnames_or_files
-        self.bert_model_name = bert_model_name
+        assert model_type in ["whole_essay", "sentences", "trunc_essay", "trunc_essay_ord", "pedantic_trunc_essay_ord", "seg_essay"]
+        self.data_dir = data_dir
+        self.bert_model = bert_model
         self.batch_size = batch_size
         self.model_type = model_type
-        self.class_nums_dict = class_nums_dict
-        assert isinstance(self.class_nums_dict, dict)
-        #self.label_map = {0:5, 1:1, 2:2, 3:3, 4:4}
+        if isinstance(class_nums, dict):
+            self.class_nums_dict = class_nums
+        else:
+            with open(class_nums, "rb") as f:
+                self.class_nums_dict = pickle.load(f)
+            assert isinstance(self.class_nums_dict, dict)
         self.config = config
 
     def class_nums(self):
-        #return {"lab_grade": ["1","2","3","4","5"]}
         return self.class_nums_dict
 
     def get_label_map(self):
@@ -47,7 +66,7 @@ class JsonDataModule(pl.LightningDataModule):
         print("Training set:")
         occurrences = self.basic_stats(self.train, get=True) # Dict[name]=List(class occurrences)
         print("Dev set:")
-        self.basic_stats(self.dev)
+        self.basic_stats(self.val)
 
         # from occurrences to weights
         # https://www.analyticsvidhya.com/blog/2020/10/improve-class-imbalance-class-weights/
@@ -84,36 +103,6 @@ class JsonDataModule(pl.LightningDataModule):
                     occ.append(cntr[i] if i in cntr else 0)
                 occurrences[name] = occ
             return occurrences
-
-    def remove_no_label(self):
-        print("Removing data points without label(s)...")
-        print("BEFORE", len(self.all_data))
-        new = []
-        for data in self.all_data:
-            add = True
-            for k in data.keys():
-                if k.startswith("lab_"):
-                    if not data[k]:
-                        add = False
-            if add:
-                new.append(data)
-        self.all_data = new
-        print("AFTER", len(self.all_data))
-
-    def clean_data(self):
-        if self.model_type=="sentences":
-            keep = ["essay", "lemma", "sents"]
-        elif "essay" in self.model_type: # "whole_essay" or "trunc_essay"
-            keep = ["essay"]
-        for data in self.all_data:
-            remove = []
-            for k in data.keys():
-                if k in keep or k.startswith("lab_"):
-                    pass
-                else:
-                    remove.append(k)
-            for k in remove:
-                del data[k]
         
     def break_essays(self, data):
         essays_processed = []
@@ -181,68 +170,51 @@ class JsonDataModule(pl.LightningDataModule):
                     
     def setup(self):
         # Read in from the JSONs
-        self.all_data=[]
-        for fname in self.fnames:
-            with open(fname, "r") as f:
-                self.all_data.extend(json.load(f))
-
-        # remove essays without labels
-        self.remove_no_label()
-
-        # remove key, value pairs that are not used
-        self.clean_data()
-
-        # Classes into numerical indices
-        for k, lst in self.class_nums().items():
-            for d in self.all_data:
-                d[k] = lst.index(d[k])
+        for split in ["train", "val", "test"]:
+            with open(pjoin(self.data_dir, f"{split}.json"), "r") as f:
+                essay = json.load(f)
+                # Classes into numerical indices
+                for k, lst in self.class_nums().items():
+                    for d in essay:
+                        d[k] = lst.index(d[k])
+                setattr(self, split, essay)
         
-        random.shuffle(self.all_data)
-        self.basic_stats(self.all_data)
-
-        # Split to train-dev-test
-        dev_start,test_start=int(len(self.all_data)*0.8),int(len(self.all_data)*0.9)
-        self.train=self.all_data[:dev_start]
-        self.dev=self.all_data[dev_start:test_start]
-        self.test=self.all_data[test_start:]
-
         # essays are long, break them
         #self.train = self.break_essays(self.train)
-        self.all_data = self.train + self.dev + self.test
+        all_data = self.train + self.val + self.test
         print("After segmenting essays")
-        self.basic_stats(self.all_data)
+        self.basic_stats(all_data)
         
         # tokenization
-        if self.model_type=="sentences": #try:
-            tokenizer = transformers.BertTokenizer.from_pretrained(self.bert_model_name,truncation=True)
-            self.tokenize(self.all_data, tokenizer)
-        elif self.model_type=="sbert":
-            tokenizer = transformers.AutoTokenizer.from_pretrained(self.bert_model_name) #, truncation=True)
-            self.tokenize(self.all_data, tokenizer)
-            #self.tokenize_sbert(self.all_data, tokenizer)
-        elif "trunc_essay" in self.model_type: #except KeyError:
-            tokenizer = transformers.BertTokenizer.from_pretrained(self.bert_model_name,truncation=True)
+        if self.model_type == "sentences":
+            tokenizer = transformers.BertTokenizer.from_pretrained(self.bert_model,truncation=True)
+            self.tokenize(all_data, tokenizer)
+        elif self.model_type == "sbert":
+            tokenizer = transformers.AutoTokenizer.from_pretrained(self.bert_model) #, truncation=True)
+            self.tokenize(all_data, tokenizer)
+        elif "trunc_essay" in self.model_type:
+            tokenizer = transformers.BertTokenizer.from_pretrained(self.bert_model,truncation=True)
             # essays and prompts are in list, turn into string
-            for d in self.all_data:
+            for d in all_data:
                 d["essay"] = " ".join(d["essay"])
-            self.tokenize_trunc_essay(self.all_data, tokenizer)
+            self.tokenize_trunc_essay(all_data, tokenizer)
         elif self.model_type == "whole_essay":
-            tokenizer = transformers.BertTokenizerFast.from_pretrained(self.bert_model_name,truncation=True)
-            for d in self.all_data:
+            tokenizer = transformers.BertTokenizerFast.from_pretrained(self.bert_model,truncation=True)
+            for d in all_data:
                 d["essay"] = " ".join(d["essay"])
-            self.tokenize_whole_essay(self.all_data, tokenizer)
+            self.tokenize_whole_essay(all_data, tokenizer)
             # debug
-            #self.all_data = [d for d in self.all_data if len(d['overflow_to_sample_mapping'])==1]
-        elif self.model_type=="seg_essay":
-            tokenizer = transformers.BertTokenizerFast.from_pretrained(self.bert_model_name,truncation=True)
-            for d in self.all_data:
+            #all_data = [d for d in all_data if len(d['overflow_to_sample_mapping'])==1]
+        elif self.model_type == "seg_essay":
+            tokenizer = transformers.BertTokenizerFast.from_pretrained(self.bert_model,truncation=True)
+            for d in all_data:
                 d["essay"] = " ".join(d["essay"])
             self.train = self.tokenize_seg_essay(self.train, tokenizer)
-            self.dev = self.tokenize_seg_essay(self.dev, tokenizer)
-            #self.tokenize_trunc_essay(self.dev, tokenizer)
+            self.val = self.tokenize_seg_essay(self.val, tokenizer)
+            #self.tokenize_trunc_essay(self.val, tokenizer)
 
     def data_sizes(self):
-        return len(self.train), len(self.dev), len(self.test)
+        return len(self.train), len(self.val), len(self.test)
     
     def get_dataloader(self,which_set,**kwargs):
         """Just a utility so I don't need to repeat this in all the *_dataloader callbacks"""
@@ -255,7 +227,7 @@ class JsonDataModule(pl.LightningDataModule):
         return self.get_dataloader(self.train, shuffle=True)
 
     def val_dataloader(self):
-        return self.get_dataloader(self.dev)
+        return self.get_dataloader(self.val)
 
     def test_dataloader(self):
         return self.get_dataloader(self.test)
@@ -285,9 +257,9 @@ def collate_tensors_fn(items):
         batch_dict[k]=[item[k] for item in items]
 
     return batch_dict
-    
 
-if __name__=="__main__":
+
+def main_test():
     d=JsonDataModule([sys.stdin])
     d.setup()
     train=d.train_dataloader()
@@ -295,3 +267,7 @@ if __name__=="__main__":
         print(x)
     #tok=transformers.BertTokenizer.from_pretrained("TurkuNLP/bert-base-finnish-cased-v1")
     #print(tok(["Minulla on koira","Minulla on kissa","Minulla on hauva"]))
+
+
+if __name__=="__main__":
+    main_test()
