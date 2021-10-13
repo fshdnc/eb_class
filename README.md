@@ -66,7 +66,7 @@ Training:
       --epochs 1 \
       --batch_size=5 \
       --model_type whole_essay \
-      --jsons /path/to/data.json
+      --data_dir /path/to/datadir
 
 A confusion matrix and scores on the validation set are printed at the end of
 training.
@@ -85,6 +85,10 @@ Getting explanation jsons using for example TKP2 dataset:
       --model_type pedantic_trunc_essay_ord \
       --class_nums /path/to/outof20.pkl \
       --load_checkpoint /path/to/out/checkpoint.ckpt \
-      --jsons /path/to/tkp2_exam.json
+      --data_dir /path/to/tkp2_exam.json
+
+If you want you can use `--exclude_upos` to give parts of speech to put in the
+reference/ignore in LIG. Commonly this would be PUNC. In this case you must
+give a data_dir which has info from the dependency parser in it.
 
 You can then view them by modifying the `explain-trunc.ipynb` Jupyter notebook.
