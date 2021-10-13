@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 
 # explainability for trunc_essay model
-from captum.attr import visualization as viz
-from captum.attr import IntegratedGradients, LayerConductance, LayerIntegratedGradients
-from captum.attr import configure_interpretable_embedding_layer, remove_interpretable_embedding_layer
+from captum.attr import LayerIntegratedGradients
 import captum
-from functools import partial
 
 import torch
 import pytorch_lightning as pl
@@ -14,6 +11,7 @@ from finnessayscore import data_reader, model
 import pickle
 import argparse
 import datetime
+from .utils import ControlTokenFilter, UposFilter, UnionFilter
 
 print("GPU availability:", torch.cuda.is_available())
 
@@ -107,15 +105,25 @@ def print_aggregated(target,aggregated):
     from IPython.core.display import HTML, display
     display(HTML(to_print))
 
-def build_ref(essay_i, batch, tokenizer, device):
+def build_ref(essay_i, batch, token_filter, tokenizer, device):
     """Given index and a batch, return reference
     input_ids, token_type_ids, and attention_mask"""
     ref_token_id = tokenizer.pad_token_id # A token used for generating token reference
     sep_token_id = tokenizer.sep_token_id # A token used as a separator between question and text and it is also added to the end of the text.
     cls_token_id = tokenizer.cls_token_id # A token used for prepending to the concatenated question-text word sequence
+    
+    token_filter.update_essay(essay_i, batch)
 
     # ref input token id
-    ref_input_ids = torch.tensor([token if token==cls_token_id or token==sep_token_id else ref_token_id for token in batch["input_ids"][essay_i]])
+    tok_idx = 0
+    seg_filtered = []
+    for token in batch["input_ids"][essay_i]:
+        use_ref = token_filter(tok_idx, token)
+        if use_ref:
+            token = ref_token_id
+        seg_filtered.append(token)
+        tok_idx += 1
+    ref_input_ids = torch.tensor(seg_filtered)
     # ref_token_type_ids
     ref_token_type_ids = batch["token_type_ids"][essay_i]
     # ref_attention_mask
@@ -132,7 +140,7 @@ def get_predictions(obj_batch, device):
                    torch.nn.utils.rnn.pad_sequence(obj_batch["token_type_ids"],batch_first=True).to(device))
 
 
-def predict_and_explain(trained_model, tokenizer, obj_batch, target_layer_func=lambda x: x.bert.embeddings, labels=("1","2","3","4","5")):
+def predict_and_explain(trained_model, tokenizer, obj_batch, token_filter, target_layer_func=lambda x: x.bert.embeddings, labels=("1","2","3","4","5")):
     device = trained_model.device
     trained_model.zero_grad() #to be safe perhaps it's not needed
 
@@ -145,7 +153,7 @@ def predict_and_explain(trained_model, tokenizer, obj_batch, target_layer_func=l
         prediction_cls=int(torch.argmax(prediction))
         print("Gold standard:", obj_batch["lab_grade"][i])
         print("Prediction:", labels[prediction_cls],"Weights:",prediction.tolist()) # default ("1","2","3","4","5")
-        ref_input = build_ref(i, obj_batch, tokenizer, device)
+        ref_input = build_ref(i, obj_batch, token_filter, tokenizer, device)
         inp = (obj_batch["input_ids"][i].unsqueeze(0).to(device),
                obj_batch["attention_mask"][i].unsqueeze(0).to(device),
                obj_batch["token_type_ids"][i].unsqueeze(0).to(device))
@@ -167,7 +175,7 @@ def predict_and_explain(trained_model, tokenizer, obj_batch, target_layer_func=l
     return aggregate_batch
 
 
-def predict_and_explain_ord(trained_model, tokenizer, obj_batch, target_layer_func=lambda x: x.bert.embeddings, labels=("1","2","3","4","5")):
+def predict_and_explain_ord(trained_model, tokenizer, obj_batch, token_filter, target_layer_func=lambda x: x.bert.embeddings, labels=("1","2","3","4","5")):
     device = trained_model.device
     ligs = [
         LayerIntegratedGradients(predict, target_layer_func(trained_model)),
@@ -179,7 +187,7 @@ def predict_and_explain_ord(trained_model, tokenizer, obj_batch, target_layer_fu
         aggregate_essay = []
         print("Gold standard:", obj_batch["lab_grade"][i])
         print("Prediction:", prediction)
-        ref_input = build_ref(i, obj_batch, tokenizer, device)
+        ref_input = build_ref(i, obj_batch, token_filter, tokenizer, device)
         inp = (obj_batch["input_ids"][i].unsqueeze(0).to(device),
                obj_batch["attention_mask"][i].unsqueeze(0).to(device),
                obj_batch["token_type_ids"][i].unsqueeze(0).to(device))
@@ -206,6 +214,7 @@ if __name__=="__main__":
     parser.add_argument('--grad_acc', type=int, default=1)
     parser.add_argument('--run_id', help="Optional run id")
     parser.add_argument('--pooling', default="cls", help="only implemented for trunc_essay model, cls or mean")
+    parser.add_argument('--exclude_upos', nargs="*", help="put tokens with these upos as part of the refernce")
 
     pl.Trainer.add_argparse_args(parser)
     data_reader.JsonDataModule.add_argparse_args(parser)
@@ -228,7 +237,7 @@ if __name__=="__main__":
     class_weights = data.get_class_weights()
 
     # model
-    tokenizer = AutoTokenizer.from_pretrained(args.bert_path)
+    tokenizer = AutoTokenizer.from_pretrained(args.bert_model)
 
     if args.model_type == "pedantic_trunc_essay_ord":
         model_cls = ExplainPedanticTruncEssayOrdModel
@@ -239,8 +248,11 @@ if __name__=="__main__":
     else:
         model_cls = ExplainTruncEssayClassModel
         predict_and_explain_func = predict_and_explain
+    token_filter = ControlTokenFilter(tokenizer)
+    if args.exclude_upos:
+        token_filter = UnionFilter(token_filter, UposFilter(tokenizer, args.exclude_upos))
     trained_model = model_cls.load_from_checkpoint(checkpoint_path=args.load_checkpoint,
-                                                   bert_model=args.bert_path,
+                                                   bert_model=args.bert_model,
                                                    class_nums=data.class_nums(),
                                                    label_smoothing=args.use_label_smoothing,
                                                    pooling=args.pooling,
@@ -260,7 +272,7 @@ if __name__=="__main__":
     for batch in data.val_dataloader():
         if count<30:
             agg_batch = predict_and_explain_func(
-                trained_model, tokenizer, batch,
+                trained_model, tokenizer, batch, token_filter,
                 labels=args.class_nums["lab_grade"] if args.class_nums else ("1","2","3","4","5"))
             agg_layer.extend(agg_batch)
             count += 1
@@ -273,7 +285,7 @@ if __name__=="__main__":
         for batch in data.val_dataloader():
             if count<30:
                 agg_batch = predict_and_explain_func(
-                    trained_model, tokenizer, batch, target_layer_func=t,
+                    trained_model, tokenizer, batch, token_filter, target_layer_func=t,
                     labels=args.class_nums["lab_grade"] if args.class_nums else ("1","2","3","4","5"))
                 agg_layer.extend(agg_batch)
             count += 1

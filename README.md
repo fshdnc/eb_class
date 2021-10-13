@@ -80,7 +80,7 @@ Results on tensorboard
 
 Getting explanation jsons using for example TKP2 dataset:
 
-    $ python -m finnessayscore.explain_trunc \
+    $ python -m finnessayscore.explain.explain_trunc \
       --gpu \
       --model_type pedantic_trunc_essay_ord \
       --class_nums /path/to/outof20.pkl \
