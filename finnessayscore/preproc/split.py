@@ -28,7 +28,7 @@ def main():
     splits = ((train, "train.json"), (dev, "val.json"), (test, "test.json"))
     for data_split, fn in splits:
         with open(pjoin(args.splits_out, fn), "w") as outf:
-            json.dump(data_split, outf)
+            json.dump(data_split, outf, indent=4, ensure_ascii=False, sort_keys=True)
 
 
 if __name__ == "__main__":

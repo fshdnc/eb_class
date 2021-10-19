@@ -175,6 +175,7 @@ class JsonDataModule(pl.LightningDataModule):
                 essay = json.load(f)
                 # Classes into numerical indices
                 for k, lst in self.class_nums().items():
+                    essay = [d for d in essay if d[k]] # remove essays without labels
                     for d in essay:
                         d[k] = lst.index(d[k])
                 setattr(self, split, essay)

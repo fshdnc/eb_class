@@ -5,41 +5,33 @@
 #SBATCH --mem-per-cpu=64G
 #SBATCH --partition=gpusmall
 #SBATCH --gres=gpu:a100:1,nvme:10
-#SBATCH -e /scratch/project_2002820/lihsin/eb_class/output/%j.err
-#SBATCH -o /scratch/project_2002820/lihsin/eb_class/output/%j.out
+#SBATCH -e /scratch/project_2004993/li/eb_class/output/%j.err
+#SBATCH -o /scratch/project_2004993/li/eb_class/output/%j.out
 
 set -euo pipefail
 echo "START: $(date)"
 
 module purge
-export SING_IMAGE=$(pwd)/eb_class_latest.sif
-
-#BERT_PATH=6539653/0_BERT #5832455/0_BERT
-#cp -r $BERT_PATH $LOCAL_SCRATCH
+export SING_IMAGE=/scratch/project_2004993/sifs/eb_class_latest.sif
 
 echo "-------------SCRIPT--------------" >&2
 cat $0 >&2
 echo -e "\n\n\n" >&2
 
-#srun singularity_wrapper exec \
-#singularity shell /path/to/singularity_image.sif
 srun singularity exec --nv -B /scratch:/scratch $SING_IMAGE \
     python3 -m finnessayscore.train \
     --gpus 1 \
-    --epochs 20 \
+    --epochs 1 \
     --lr 1e-5 \
     --batch_size 16 \
     --grad_acc 3 \
     --model_type trunc_essay \
-    --jsons data/ismi-kirjoitelmat-parsed.json \
+    --data_dir data/ismi \
     --max_length 512
     #--bert_path $BERT_PATH \
     #--use_label_smoothing \
     #--smoothing 0.0 \
-    #--whole_essay_overlap 5 \
-    #--jsons data/ismi_late_submission-parsed.json
-
-
+    #--whole_essay_overlap 5
 
 seff $SLURM_JOBID
 echo "END: $(date)"

@@ -213,6 +213,13 @@ def evaluate(dataloader, model, label_map, model_type, plot_conf_mat=False, do_p
                 x.append("wrong")
         #print("x", x, len(x))
         #print("probs", probs, len(probs))
+        # all together
         plot_beeswarm_prob(x, probs, fname="probbee_"+fname if fname else None)
+        # by gold label
+        for i in set(target):
+            selected_idcs = [if t==i True else False for t in target]
+            selected_x = [xx for t, xx in zip(target, x) if t]
+            selected_probs = [p for t, p in zip(target, probs) if t]
+            plot_beeswarm_prob(selected_x, selected_probs, fname="probbee_"+str(i)+fname if fname else str(i))
 
 
