@@ -8,7 +8,7 @@ def filter_json_file(inp, out, filter_func):
         data = json.load(inf)
     data = filter_func(data)
     with open(out, "w") as outf:
-        json.dump(data, outf)
+        json.dump(data, outf, indent=4, ensure_ascii=False, sort_keys=True)
 
 
 def filter_json(inp, out, filter_func):

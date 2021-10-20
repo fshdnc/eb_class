@@ -36,6 +36,7 @@ if __name__=="__main__":
     if not args.run_id:
         args.run_id = str(datetime.datetime.now()).replace(":","").replace(" ","_")
     print("RUN_ID", args.run_id, sep="\t")
+    os.mkdir(args.run_id)
 
     data = data_reader.JsonDataModule.from_argparse_args(args)
     data.setup()
@@ -98,7 +99,7 @@ if __name__=="__main__":
         plot_conf_mat=True,
         do_plot_beeswarm=args.model_type.endswith("_ord"),
         do_plot_prob=True,
-        fname=args.run_id
+        fname=args.run_id+"/"
     )
     
 

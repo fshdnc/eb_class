@@ -195,10 +195,10 @@ def evaluate(dataloader, model, label_map, model_type, plot_conf_mat=False, do_p
     conf_mat = confusion_matrix(preds, target, labels=[l for i, l in label_map["lab_grade"].items()])
     print("Confusion matrix:\n", conf_mat)
     if plot_conf_mat:
-        plot_confusion_matrix(conf_mat, label_map["lab_grade"], fname="confmat_"+fname if fname else None)
+        plot_confusion_matrix(conf_mat, label_map["lab_grade"], fname=fname+"confmat" if fname else None)
 
     if do_plot_beeswarm:
-        plot_beeswarm(outputs, target, model.cutoffs_score_scale()["lab_grade"], label_map["lab_grade"], fname="beeswarm_"+fname if fname else None)
+        plot_beeswarm(outputs, target, model.cutoffs_score_scale()["lab_grade"], label_map["lab_grade"], fname=fname+"beeswarm" if fname else None)
 
     if do_plot_prob:
         probs = []
@@ -214,12 +214,12 @@ def evaluate(dataloader, model, label_map, model_type, plot_conf_mat=False, do_p
         #print("x", x, len(x))
         #print("probs", probs, len(probs))
         # all together
-        plot_beeswarm_prob(x, probs, fname="probbee_"+fname if fname else None)
+        plot_beeswarm_prob(x, probs, fname=fname+"probbee" if fname else None)
         # by gold label
         for i in set(target):
-            selected_idcs = [if t==i True else False for t in target]
-            selected_x = [xx for t, xx in zip(target, x) if t]
-            selected_probs = [p for t, p in zip(target, probs) if t]
-            plot_beeswarm_prob(selected_x, selected_probs, fname="probbee_"+str(i)+fname if fname else str(i))
+            selected_idcs = [True if t== i else False for t in target]
+            selected_x = [xx for t, xx in zip(selected_idcs, x) if t]
+            selected_probs = [p for t, p in zip(selected_idcs, probs) if t]
+            plot_beeswarm_prob(selected_x, selected_probs, fname=fname+"probbee_"+str(i) if fname else str(i))
 
 

@@ -175,7 +175,7 @@ class JsonDataModule(pl.LightningDataModule):
                 essay = json.load(f)
                 # Classes into numerical indices
                 for k, lst in self.class_nums().items():
-                    essay = [d for d in essay if d[k]] # remove essays without labels
+                    # essay = [d for d in essay if d[k]] # remove essays without labels -> this is done in pre-processing
                     for d in essay:
                         d[k] = lst.index(d[k])
                 setattr(self, split, essay)
@@ -239,7 +239,7 @@ def collate_tensors_fn(items):
     pad_these=[] #let us be wannabe clever and pad everything which is a tensor
     tensor_these = [] # make a tensor of everything which is "lab_" key and an int
     list_these=[] #everything which is not a tensor we stick into a list
-    
+
     for k,v in item.items():
         if isinstance(v,torch.Tensor):
             pad_these.append(k)
