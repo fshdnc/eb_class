@@ -45,7 +45,7 @@ rule get_finer_output:
     output:
         pjoin(DATASETS, "tkp2_exam.finer")
     singularity:
-        "docker://ghcr.io/fshdnc/finnessayscore_finer@sha256:bedcd2487787f9721b061766a2e87beec65757b9f3b9d04a940d24ed62ca2e89"
+        "docker://ghcr.io/fshdnc/finnessayscore_finer@sha256:c6232cffa903e6c89bdfbb7451c0978be11af779ada14c7a208f4d157a488436"
     shell:
         "PYTHONPATH=/usr/src/app/:${{PYTHONPATH:-}} "
         "python -m preproc_finer.parse "
