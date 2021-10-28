@@ -10,7 +10,7 @@ RUN wget http://dl.turkunlp.org/turku-ner-models/combined-ext-model-130220.tar.g
   tar xvzf combined-ext-model-130220.tar.gz && \
   rm combined-ext-model-130220.tar.gz
 
-RUN pip install --no-deps keras-bert==0.84.0 && \
-  pip install flask keras==2.3.1 keras-transformer==0.39.0 
+RUN pip install --no-cache-dir --no-deps keras-bert==0.84.0 && \
+  pip install --no-cache-dir flask keras==2.3.1 keras-transformer==0.39.0
 
 COPY preproc_finer .
