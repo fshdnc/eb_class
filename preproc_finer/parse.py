@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
+import sys
 import numpy as np
 import json
-from pprint import pprint
 
 from argparse import ArgumentParser
 from common import encode, process_sentences, load_ner_model
@@ -29,25 +29,30 @@ def mk_argparser():
     return argparser
 
 
-def read_json(args):
-    with open(args.json, "rt", encoding="utf-8") as f:
+def read_json(input_file):
+    with open(input_file, "rt", encoding="utf-8") as f:
         data = json.load(f)
 
     essay_mask = []
     words = []
     labels = []
     for essay_idx, essay in enumerate(data):
-        essay_mask.append(essay_idx)
-        for sent in essay["sents"]:
+        for sent in essay["surfs"]:
+            essay_mask.append(essay_idx)
             words.append(sent)
-            for tok in sent:
-                labels.append("O")
+            labels.append(["O"] * len(sent))
     return essay_mask, words, labels
 
 
-def filter_json(args):
-    with open(args.json, "rt", encoding="utf-8") as f:
+def filter_json(input_file, output_file, indexed_labels):
+    with open(input_file, "rt", encoding="utf-8") as f:
         data = json.load(f)
+
+    for essay_idx, labels in indexed_labels.items():
+        data[essay_idx]["ner"] = labels
+
+    with open(output_file, "wt", encoding="utf-8") as f:
+        json.dump(data, f)
 
 
 def main():
@@ -60,29 +65,37 @@ def main():
     label_map = {t: i for i, t in enumerate(labels)}
     inv_label_map = {v: k for k, v in label_map.items()}
 
-    mask, words, labels = read_json(args.input_file)
+    mask, all_words, dummy_labels = read_json(args.input_file)
     sents_data = process_sentences(
-        words,
-        labels,
+        all_words,
+        dummy_labels,
         tokenizer,
         max_seq_len
     )
 
     test_x = encode(sents_data.combined_tokens, tokenizer, max_seq_len)
-
     probs = ner_model.predict(test_x, batch_size=args.batch_size)
-
-    pred_labels = []
     preds = np.argmax(probs, axis=-1)
-    for i, pred in enumerate(preds):
-        pred_labels.append([inv_label_map[t] for t in
-                            pred[1:len(sents_data.tokens[i])+1]])
-
-    pprint(sents_data.words)
-    pprint(sents_data.lengths)
-    pprint(sents_data.tokens)
-    pprint(sents_data.labels)
-    pprint(pred_labels)
+    indexed_labels = {}
+    zipped = zip(mask, preds, sents_data.words, sents_data.tokens)
+    lengths = sents_data.lengths
+    length_idx = 0
+    for essay_idx, pred, words, tokens in zipped:
+        pred_slice = pred[1: len(tokens) + 1]
+        pred_label_tok = [inv_label_map[t] for t in pred_slice]
+        pred_label_word = []
+        idx = 0
+        for word in words:
+            tok = tokens[idx]
+            if not (word.startswith(tok) or tok == '[UNK]'):
+                print('tokenization mismatch: "{}" vs "{}"'.format(
+                    word, tok), file=sys.stderr)
+                sys.exit(-1)
+            pred_label_word.append(pred_label_tok[idx])
+            idx += lengths[length_idx]
+            length_idx += 1
+        indexed_labels.setdefault(essay_idx, []).append(pred_label_word)
+    filter_json(args.input_file, args.output_file, indexed_labels)
 
 
 if __name__ == "__main__":
