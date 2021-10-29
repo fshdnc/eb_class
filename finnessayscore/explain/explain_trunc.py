@@ -11,7 +11,7 @@ from finnessayscore import data_reader, model
 import pickle
 import argparse
 import datetime
-from .utils import ControlTokenFilter, UposFilter, UnionFilter
+from .utils import ControlTokenFilter, UposFilter, NerFilter, UnionFilter
 
 print("GPU availability:", torch.cuda.is_available())
 
@@ -214,7 +214,8 @@ if __name__=="__main__":
     parser.add_argument('--grad_acc', type=int, default=1)
     parser.add_argument('--run_id', help="Optional run id")
     parser.add_argument('--pooling', default="cls", help="only implemented for trunc_essay model, cls or mean")
-    parser.add_argument('--exclude_upos', nargs="*", help="put tokens with these upos as part of the refernce")
+    parser.add_argument('--exclude_upos', nargs="*", help="exclude tokens with these upos by adding them to empty")
+    parser.add_argument('--exclude_ner', nargs="*", help="exclude tokens with these ner tags by adding them to empty. Can specify ALL to exclude all named entities.")
 
     pl.Trainer.add_argparse_args(parser)
     data_reader.JsonDataModule.add_argparse_args(parser)
@@ -251,6 +252,8 @@ if __name__=="__main__":
     token_filter = ControlTokenFilter(tokenizer)
     if args.exclude_upos:
         token_filter = UnionFilter(token_filter, UposFilter(tokenizer, args.exclude_upos))
+    if args.exclude_ner:
+        token_filter = UnionFilter(token_filter, NerFilter(tokenizer, args.exclude_ner))
     trained_model = model_cls.load_from_checkpoint(checkpoint_path=args.load_checkpoint,
                                                    bert_model=args.bert_model,
                                                    class_nums=data.class_nums(),
