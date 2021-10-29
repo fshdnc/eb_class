@@ -118,8 +118,8 @@ def build_ref(essay_i, batch, token_filter, tokenizer, device):
     tok_idx = 0
     seg_filtered = []
     for token in batch["input_ids"][essay_i]:
-        use_ref = token_filter(tok_idx, token)
-        if use_ref:
+        ignore_token = token_filter(tok_idx, token)
+        if not ignore_token:
             token = ref_token_id
         seg_filtered.append(token)
         tok_idx += 1
