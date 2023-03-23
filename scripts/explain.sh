@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=train
-#SBATCH --account=project_2002820
+#SBATCH --account=project_2004993
 #SBATCH --time=00:10:00
 #SBATCH --mem-per-cpu=64G
 #SBATCH --partition=test
 # --gres=gpu:v100:1
-#SBATCH -e /scratch/project_2002820/lihsin/eb_class/output/%j.err
-#SBATCH -o /scratch/project_2002820/lihsin/eb_class/output/%j.out
+#SBATCH -e /scratch/project_2004993/lihsin/eb_class/output/%j.err
+#SBATCH -o /scratch/project_2004993/lihsin/eb_class/output/%j.out
 
 set -euo pipefail
 echo "START: $(date)"
@@ -29,6 +29,7 @@ srun singularity exec --nv -B /scratch:/scratch $SING_IMAGE \
     --whole_essay_overlap 5 \
     --max_length 512 \
     --jsons data/ismi-kirjoitelmat-parsed.json
+    #--load_checkpoint  best_model.ckpt \
     #--epochs 20 \
     #--lr 2e-5 \
     #--grad_acc 1 \

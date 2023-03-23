@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=train
-#SBATCH --account=project_2002820
+#SBATCH --account=project_2004993
 #SBATCH --time=02:00:00
 #SBATCH --mem-per-cpu=64G
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:v100:1
-#SBATCH -e /scratch/project_2002820/lihsin/eb_class/output/%j.err
-#SBATCH -o /scratch/project_2002820/lihsin/eb_class/output/%j.out
+#SBATCH -e /scratch/project_2004993/lihsin/eb_class/output/%j.err
+#SBATCH -o /scratch/project_2004993/lihsin/eb_class/output/%j.out
 
 set -euo pipefail
 echo "START: $(date)"
