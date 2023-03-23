@@ -31,6 +31,9 @@ if __name__=="__main__":
     parser.add_argument('--pooling', default="cls", help="only implemented for trunc_essay model, cls or mean")
     parser.add_argument('--max_length', type=int, default=512, help="max number of token used in the whole essay model")
     parser.add_argument('--run_id', help="Optional run id")
+    #parser.add_argument('--gpus', default=None, help="Number of gpus")
+
+    pl.Trainer.add_argparse_args(parser)
 
     args = parser.parse_args()
     assert args.model_type in ["whole_essay", "sentences", "trunc_essay", "trunc_essay_ord", "pedantic_trunc_essay_ord", "seg_essay"]
@@ -75,33 +78,46 @@ if __name__=="__main__":
               lr=args.lr,
               label_smoothing=args.use_label_smoothing, smoothing=args.smoothing,
               num_training_steps=train_len//args.batch_size*args.epochs,
-              class_weights={k: v.cuda() for k, v in class_weights.items()},
+              class_weights=class_weights,
               pooling=args.pooling)
     #os.system("rm -rf lightning_logs")
     logger = pl.loggers.TensorBoardLogger("lightning_logs",
                                           name=args.run_id,
                                           version="latest")
-    checkpoint_callback = ModelCheckpoint(monitor='val_acc_lab_grade',
-                                          filename="baseline-{epoch:02d}-{val_acc_lab_grade:.2f}",
+    checkpoint_callback = ModelCheckpoint(monitor='val_qwk_lab_grade',
+                                          filename="baseline-{epoch:02d}-{val_acc_qwk_grade:.2f}",
                                           save_top_k=1,
                                           mode="max")
-    trainer = pl.Trainer(gpus=1,
-                         accumulate_grad_batches=args.grad_acc,
-                         max_epochs=args.epochs,
-                         progress_bar_refresh_rate=0,
-                         log_every_n_steps=1,
-                         logger=logger,
-                         callbacks=[checkpoint_callback],
-                         fast_dev_run=False)
+    trainer = pl.Trainer.from_argparse_args(
+        args,
+        accumulate_grad_batches=args.grad_acc,
+        max_epochs=args.epochs,
+        progress_bar_refresh_rate=0,
+        log_every_n_steps=1,
+        logger=logger,
+        callbacks=[checkpoint_callback],
+        #gpus=args.gpus
+    )
     trainer.fit(model, datamodule=data)
     checkpoint_callback.best_model_path
 
     model.eval()
+    if trainer.gpus is not None and trainer.gpus > 0:
+        model.cuda()
 
     from finnessayscore.evaluate import evaluate
     print("Training set")
     evaluate(data.train_dataloader(), model, data.get_label_map(), model_type=args.model_type)
     print("Validation set")
-    evaluate(data.val_dataloader(), model, data.get_label_map(), model_type=args.model_type, plot_conf_mat=True)
+    evaluate(
+        data.val_dataloader(),
+        model,
+        data.get_label_map(),
+        model_type=args.model_type,
+        plot_conf_mat=True,
+        do_plot_beeswarm=args.model_type.endswith("_ord"),
+        do_plot_prob=True,
+        fname=args.run_id
+    )
     
 

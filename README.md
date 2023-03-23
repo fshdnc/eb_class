@@ -11,6 +11,31 @@ You can install the dependencies using Poetry:
 Or else use the Docker image / `Dockerfile`. The Docker image has been tested
 mainly under Singularity.
 
+## Data format
+
+Input data is a JSON array of objects [{...}, {...}] with one object per essay.
+It should have at least the keys:
+
+ * "essay": an array of strings for each line of the essay e.g. ["Lorem ipsum --", "dolar"]
+ * "lab_grade": the grade as an string e.g. "3"
+
+## Preprocessing
+
+Convert TKP exam data to the JSON format by using:
+
+    $ python -m finnessayscore.process_tkp tkp.xls tkp.json
+
+Some models need parsed data. In this case, further preprocessing should be
+done like so:
+
+    $ python -m finnessayscore.parse example.json example_parse.json
+
+You will need to provide the grading scale of your dataset as a pickle file.
+You can generate some standard grading scales with
+`finnessayscore.mk_grade_pickle`.
+
+    $ python -m finnessayscore.mk_grade_pickle outof20 outof20.pkl
+
 ## Training/evaluation
 
 Training:
